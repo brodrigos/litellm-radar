@@ -507,7 +507,7 @@
           ),
         );
 
-        const chainBox = el('div', { class: 'radar-chain' });
+        const chainBox = el('div', { class: 'radar-chain radar-chain-primary' });
         if (!state.gw.chain.length) {
           chainBox.append(el('div', { class: 'radar-empty', text: 'Cadeia vazia — nenhum fallback será aplicado.' }));
         } else {
@@ -523,7 +523,7 @@
               class: 'radar-hint',
               text: 'Aplicado aos modelos da cadeia que não estão nesta lista — hoje manda prompt grande para os modelos de 1M de contexto.',
             }),
-            el('div', { class: 'radar-chain' }, [
+            el('div', { class: 'radar-chain radar-chain-ctx' }, [
               state.gw.ctx.length
                 ? state.gw.ctx.map((name, i) => chainRow(name, i, state.gw.ctx, 'ctx'))
                 : el('div', { class: 'radar-empty', text: 'Nenhum modelo marcado (context_window_fallbacks vazio).' }),

@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node ../litellm-radar-server.js",
-    "test": "node tests/gateway.test.js"
+    "test": "node tests/gateway.test.js && node tests/tool.test.js"
   },
   "keywords": [
     "litellm",

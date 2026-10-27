@@ -89,11 +89,14 @@ versão mascarada (`AQ.Ab8…OSzw`).
 ## Testes
 
 ```bash
-cd litellm-radar && node tests/gateway.test.js
+cd litellm-radar && npm test
 ```
 
-13 testes cobrem derivação da cadeia, balancing de chaves, reordenação, remoção,
-idempotência, validação do arquivo, backups e e-mails por conta.
+25 testes, nenhum precisa de navegador nem do NAS:
+`tests/gateway.test.js` (13) cobre derivação da cadeia, balancing de chaves,
+reordenação, remoção, idempotência, validação do arquivo e backups;
+`tests/tool.test.js` (12) monta a interface num DOM mínimo e clica de verdade —
+ordem da lista, e-mails das contas, inclusão/exclusão e os POSTs enviados.
 
 ## Licença
 
