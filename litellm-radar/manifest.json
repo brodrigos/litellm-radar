@@ -1,11 +1,11 @@
 {
   "id": "litellm-radar",
   "name": "LiteLLM Server Radar",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "icon": "📡",
-  "badge": "ativo",
-  "tagline": "Status ao vivo, latência e varredura do servidor LiteLLM",
-  "description": "Monitoramento em tempo real, varredura de modelos, teste de latência e verificação de saúde do servidor central LiteLLM (192.168.1.130:4000).",
+  "badge": "novo",
+  "tagline": "Status ao vivo, contas por chave e ordem de fallback editável",
+  "description": "Varredura de modelos do gateway LiteLLM com latência, contas (e-mail) de cada API key para provedores com mais de uma chave, e editor da sequência de fallback — reordenar, incluir e tirar modelos sem editar o config à mão.",
   "scripts": [
     "tool.js"
   ],

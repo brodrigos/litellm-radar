@@ -1,0 +1,7 @@
+# dependências e estado local
+node_modules/
+litellm-radar/gateway-state.json
+
+# sobras de teste
+.tmp/
+tmp/

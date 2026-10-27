@@ -1,0 +1,22 @@
+{
+  "name": "litellm-radar",
+  "version": "1.1.0",
+  "description": "Radar do gateway LiteLLM: varredura de modelos, contas/chaves por provedor e editor da ordem de fallback",
+  "main": "index.js",
+  "scripts": {
+    "start": "node ../litellm-radar-server.js",
+    "test": "node tests/gateway.test.js"
+  },
+  "keywords": [
+    "litellm",
+    "fallback",
+    "dashboard",
+    "brodrigos"
+  ],
+  "author": "brodrigos",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "yaml": "^2.9.1"
+  }
+}
