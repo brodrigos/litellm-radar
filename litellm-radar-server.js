@@ -69,6 +69,17 @@ async function testModel(modelId) {
 }
 
 const server = http.createServer(async (req, res) => {
+  // CORS Headers obrigatórios para o dashboard (porta 8899) acessar a porta 3333
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   if (url.pathname === '/' || url.pathname === '/index.html') {
@@ -81,14 +92,14 @@ const server = http.createServer(async (req, res) => {
       res.end('Erro ao carregar litellm-radar-index.html');
     }
   } else if (url.pathname === '/api/scan') {
-    console.log('Iniciando varredura de modelos no LiteLLM...');
+    console.log('Iniciando varredura de modelos no LiteLLM via API...');
     try {
       const modelsResp = await fetch(`http://${LITELLM_HOST}:${LITELLM_PORT}/v1/models`, {
         headers: { 'Authorization': 'Bearer ' + API_KEY }
       });
 
       if (!modelsResp.ok) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.writeHead(500, { 'Content-Type': 'application/json', 'Connection': 'close' });
         res.end(JSON.stringify({ success: false, error: 'Falha ao listar modelos do LiteLLM (HTTP ' + modelsResp.status + ')' }));
         return;
       }
