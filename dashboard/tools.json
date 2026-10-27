@@ -1,0 +1,10 @@
+{
+  "paths": [
+    "./tools",
+    "../webchat-memory-importer",
+    "../av1-encoder",
+    "../freeapi-radar/dashboard-tool",
+    "../memos-explorer",
+    "../litellm-radar"
+  ]
+}

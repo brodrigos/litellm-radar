@@ -1,0 +1,16 @@
+{
+  "id": "litellm-radar",
+  "name": "LiteLLM Server Radar",
+  "version": "1.0.0",
+  "icon": "📡",
+  "badge": "ativo",
+  "tagline": "Status ao vivo, latência e varredura do servidor LiteLLM",
+  "description": "Monitoramento em tempo real, varredura de modelos, teste de latência e verificação de saúde do servidor central LiteLLM (192.168.1.130:4000).",
+  "scripts": [
+    "tool.js"
+  ],
+  "styles": [
+    "tool.css"
+  ],
+  "homepage": "https://github.com/brodrigos/litellm-radar"
+}
