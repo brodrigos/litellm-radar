@@ -3,7 +3,7 @@
  *
  * Faz varredura e testa modelos do servidor LiteLLM em tempo real.
  * Se o servidor local (localhost:3333) não estiver rodando, exibe um botão
- * "Iniciar Servidor" com instruções claras.
+ * "Iniciar Servidor" com instruções claras e dispara varredura automática ao carregar.
  */
 (function (global) {
   'use strict';
@@ -167,21 +167,12 @@
             el('h3', { class: 'text-xl font-bold text-white mb-2', text: 'Servidor Radar não está em execução' }),
             el('p', { class: 'text-slate-400 mb-6', text: 'Para ativar a varredura de modelos, inicie o servidor Node.js local.' }),
             el('code', { class: 'block bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm mb-4 text-indigo-300 overflow-x-auto', text: 'node litellm-radar-server.js' }),
-            el('div', { class: 'flex gap-3' }, [
+            el('div', { class: 'flex gap-3 justify-center' }, [
               el('button', {
                 class: 'btn btn-primary px-6 py-2',
                 type: 'button',
-                text: 'Como Iniciar',
-                onclick: () => {
-                  ctx.toast('Abra o terminal na pasta litellm-radar e rode: node litellm-radar-server.js', 'info');
-                },
-              }),
-              el('a', {
-                class: 'btn btn-ghost px-6 py-2',
-                href: 'https://github.com/brodrigos/litellm-radar',
-                target: '_blank',
-                rel: 'noopener',
-                text: 'Repositório',
+                text: 'Tentar Conectar Novamente',
+                onclick: () => scan(),
               }),
             ]),
           ]),
@@ -202,31 +193,22 @@
           : (state.error ? `Erro: ${state.error}` : 'Varredura pronta. Servidor ativo em localhost:3333');
       }
 
-      async function checkServer() {
-        try {
-          const res = await fetch(`${SERVER_URL}/api/scan`, { method: 'HEAD', cache: 'no-store' });
-          state.serverUp = true;
-        } catch (err) {
-          state.serverUp = false;
-        }
-        render();
-      }
-
       async function scan() {
-        if (state.scanning || state.serverUp === false) return;
         state.scanning = true;
         state.error = null;
         render();
-        ctx.toast('Iniciando varredura no LiteLLM...', 'info');
+        ctx.toast('Conectando ao servidor radar...', 'info');
 
         try {
           const res = await fetch(`${SERVER_URL}/api/scan`, { cache: 'no-store' });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           state.data = await res.json();
+          state.serverUp = true;
           ctx.toast('Varredura concluída com sucesso!', 'success');
         } catch (err) {
           state.error = err.message;
-          ctx.toast('Falha ao conectar com o servidor radar', 'error');
+          state.serverUp = false;
+          ctx.toast('Servidor radar fora do ar', 'error');
         } finally {
           state.scanning = false;
           render();
@@ -240,12 +222,11 @@
             type: 'button',
             text: 'Executar Varredura',
             onclick: () => scan(),
-            disabled: state.serverUp === false,
           }),
         ]),
       );
 
-      checkServer();
+      scan();
     },
   });
 })(window);
