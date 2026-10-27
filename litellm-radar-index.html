@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiteLLM Server Radar - Status & Health Check</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-center mb-8 bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-md">
+            <div>
+                <div class="flex items-center gap-3 mb-1">
+                    <div class="p-3 bg-indigo-600/20 border border-indigo-500/30 rounded-xl text-indigo-400 text-2xl">
+                        <i class="fa-solid fa-radar"></i>
+                    </div>
+                    <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight text-white">LiteLLM Server Radar</h1>
+                </div>
+                <p class="text-slate-400 text-sm">Monitoramento em tempo real, latência e varredura de modelos do servidor central LiteLLM.</p>
+            </div>
+            <div class="flex items-center gap-4 mt-4 md:mt-0">
+                <div id="global-status" class="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800/80 border border-slate-700 text-sm font-medium">
+                    <span class="relative flex h-3 w-3">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                    </span>
+                    <span id="global-status-text">Aguardando varredura...</span>
+                </div>
+                <button onclick="runScan()" id="scan-btn" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-600/30 transition-all duration-200 active:scale-95">
+                    <i class="fa-solid fa-rotate" id="scan-icon"></i>
+                    <span>Varrer Modelos</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Stats Overview -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 shadow-lg">
+                <div class="flex justify-between items-center text-slate-400 mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider">Total de Modelos</span>
+                    <i class="fa-solid fa-cubes text-indigo-400"></i>
+                </div>
+                <div class="text-3xl font-black text-white" id="stat-total">0</div>
+            </div>
+            <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 shadow-lg">
+                <div class="flex justify-between items-center text-slate-400 mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider">Operacionais (Online)</span>
+                    <i class="fa-solid fa-circle-check text-emerald-400"></i>
+                </div>
+                <div class="text-3xl font-black text-emerald-400" id="stat-online">0</div>
+            </div>
+            <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 shadow-lg">
+                <div class="flex justify-between items-center text-slate-400 mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider">Fora do Ar / Erro</span>
+                    <i class="fa-solid fa-triangle-exclamation text-rose-400"></i>
+                </div>
+                <div class="text-3xl font-black text-rose-400" id="stat-offline">0</div>
+            </div>
+            <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 shadow-lg">
+                <div class="flex justify-between items-center text-slate-400 mb-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider">Latência Média</span>
+                    <i class="fa-solid fa-bolt text-amber-400"></i>
+                </div>
+                <div class="text-3xl font-black text-amber-400" id="stat-latency">0 ms</div>
+            </div>
+        </div>
+
+        <!-- Filter & Search Bar -->
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4">
+            <div class="relative w-full sm:w-96">
+                <i class="fa-solid fa-search absolute left-4 top-3.5 text-slate-500"></i>
+                <input type="text" id="search-input" oninput="filterModels()" placeholder="Buscar modelo por nome..." class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-11 pr-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors">
+            </div>
+            <div class="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0">
+                <button onclick="setFilter('all')" id="filter-all" class="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white transition-all">Todos</button>
+                <button onclick="setFilter('online')" id="filter-online" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-400 hover:bg-slate-700 transition-all">Online</button>
+                <button onclick="setFilter('offline')" id="filter-offline" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-400 hover:bg-slate-700 transition-all">Offline</button>
+            </div>
+        </div>
+
+        <!-- Models Grid -->
+        <div id="models-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-12">
+            <div class="col-span-full text-center py-16 text-slate-500">
+                <i class="fa-solid fa-satellite-dish text-4xl mb-3 animate-pulse"></i>
+                <p class="text-base">Clique em "Varrer Modelos" para testar a conectividade do LiteLLM.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let modelsData = [];
+        let currentFilter = 'all';
+
+        async function runScan() {
+            const btn = document.getElementById('scan-btn');
+            const icon = document.getElementById('scan-icon');
+            const statusText = document.getElementById('global-status-text');
+            const globalStatus = document.getElementById('global-status');
+            
+            btn.disabled = true;
+            icon.classList.add('fa-spin');
+            statusText.textContent = 'Varrendo modelos do LiteLLM...';
+            globalStatus.className = 'flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm font-medium';
+
+            try {
+                const res = await fetch('/api/scan');
+                const data = await res.json();
+                if(data.success) {
+                    modelsData = data.models;
+                    updateStats(data.summary);
+                    renderModels();
+                    statusText.textContent = 'Varredura concluída (' + new Date().toLocaleTimeString() + ')';
+                    globalStatus.className = 'flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm font-medium';
+                } else {
+                    alert('Erro na varredura: ' + (data.error || 'Erro desconhecido'));
+                    statusText.textContent = 'Erro na varredura';
+                    globalStatus.className = 'flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-sm font-medium';
+                }
+            } catch(e) {
+                alert('Erro de conexão com o servidor local.');
+                statusText.textContent = 'Erro de conexão';
+                globalStatus.className = 'flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-sm font-medium';
+            } finally {
+                btn.disabled = false;
+                icon.classList.remove('fa-spin');
+            }
+        }
+
+        function updateStats(summary) {
+            document.getElementById('stat-total').textContent = summary.total;
+            document.getElementById('stat-online').textContent = summary.online;
+            document.getElementById('stat-offline').textContent = summary.offline;
+            document.getElementById('stat-latency').textContent = summary.avgLatency + ' ms';
+        }
+
+        function setFilter(filter) {
+            currentFilter = filter;
+            ['all', 'online', 'offline'].forEach(f => {
+                const btn = document.getElementById('filter-' + f);
+                if(f === filter) {
+                    btn.className = 'px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white transition-all';
+                } else {
+                    btn.className = 'px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 text-slate-400 hover:bg-slate-700 transition-all';
+                }
+            });
+            renderModels();
+        }
+
+        function filterModels() {
+            renderModels();
+        }
+
+        function renderModels() {
+            const grid = document.getElementById('models-grid');
+            const search = document.getElementById('search-input').value.toLowerCase();
+            
+            const filtered = modelsData.filter(m => {
+                const matchesSearch = m.id.toLowerCase().includes(search);
+                if(currentFilter === 'online') return matchesSearch && m.status === 'online';
+                if(currentFilter === 'offline') return matchesSearch && m.status === 'offline';
+                return matchesSearch;
+            });
+
+            if(filtered.length === 0) {
+                grid.innerHTML = '<div class="col-span-full text-center py-16 text-slate-500"><i class="fa-solid fa-filter-circle-xmark text-4xl mb-3"></i><p>Nenhum modelo encontrado com os filtros atuais.</p></div>';
+                return;
+            }
+
+            grid.innerHTML = filtered.map(m => {
+                const isOnline = m.status === 'online';
+                return `
+                    <div class="bg-slate-900/80 border ${isOnline ? 'border-emerald-500/30' : 'border-rose-500/30'} rounded-2xl p-5 shadow-lg flex flex-col justify-between hover:border-slate-700 transition-all">
+                        <div>
+                            <div class="flex justify-between items-start mb-3">
+                                <span class="px-3 py-1 rounded-lg text-xs font-bold ${isOnline ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}">
+                                    <i class="fa-solid ${isOnline ? 'fa-circle-check' : 'fa-triangle-exclamation'} mr-1.5"></i> ${isOnline ? 'ONLINE' : 'OFFLINE'}
+                                </span>
+                                <span class="text-xs font-mono text-slate-400 bg-slate-800 px-2.5 py-1 rounded-lg">${m.latency ? m.latency + ' ms' : 'N/A'}</span>
+                            </div>
+                            <h3 class="text-lg font-bold text-white mb-1 truncate" title="${m.id}">${m.id}</h3>
+                            <p class="text-xs text-slate-400 mb-4 line-clamp-2">${m.error || 'Respondendo normalmente ao teste de inferência /ping.'}</p>
+                        </div>
+                        <div class="pt-4 border-t border-slate-800/80 flex justify-between items-center text-xs text-slate-500">
+                            <span>LiteLLM Proxy Endpoint</span>
+                            <span class="text-slate-400 font-mono">v1/chat/completions</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        window.onload = () => {
+            runScan();
+        };
+    </script>
+</body>
+</html>
