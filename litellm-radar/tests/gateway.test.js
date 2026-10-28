@@ -191,6 +191,17 @@ test('e-mail em chave de variável de ambiente usa o prefixo env:', () => {
   assert.strictEqual(acc.envRef, true);
 });
 
+test('cota diária e uso podem ser salvos e recuperados', () => {
+  const box = sandbox();
+  const snap = gateway.snapshot(box);
+  const fp = snap.accounts[0].fingerprint;
+  gateway.saveAccounts([{ fingerprint: fp, email: snap.accounts[0].email, quotaDaily: 5000, quotaUsed: 1200 }], box);
+  const after = gateway.snapshot(box);
+  const acc = after.accounts.find((a) => a.fingerprint === fp);
+  assert.strictEqual(acc.quotaDaily, 5000);
+  assert.strictEqual(acc.quotaUsed, 1200);
+});
+
 test('backup é criado quando o arquivo muda', () => {
   const box = sandbox();
   const res = gateway.saveChain({ chain: ['beta', 'delta'], ctxTargets: [] }, box);

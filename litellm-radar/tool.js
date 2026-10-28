@@ -422,6 +422,7 @@
               el('th', { text: 'provedor / modelo base' }),
               el('th', { text: 'chave' }),
               el('th', { text: 'e-mail da conta' }),
+              el('th', { text: 'cota diária / uso' }),
               el('th', { text: 'usada em' }),
             ]),
           ]),
@@ -440,7 +441,7 @@
               try {
                 const res = await jsonFetch('/api/gateway/accounts', {
                   method: 'POST',
-                  body: JSON.stringify({ accounts: [{ fingerprint: acc.fingerprint, email }] }),
+                  body: JSON.stringify({ accounts: [{ fingerprint: acc.fingerprint, email, quotaDaily: acc.quotaDaily, quotaUsed: acc.quotaUsed }] }),
                 });
                 state.gw.data = res.snapshot || state.gw.data;
                 ctx.toast(email ? 'E-mail salvo' : 'E-mail removido', 'success');
@@ -450,6 +451,59 @@
               }
             },
           });
+
+          // Inputs de cota
+          const dailyInput = el('input', {
+            type: 'number',
+            class: 'radar-email-input radar-quota-input',
+            placeholder: 'Máx',
+            value: acc.quotaDaily != null ? acc.quotaDaily : '',
+            title: 'Cota diária limite',
+          });
+          const usedInput = el('input', {
+            type: 'number',
+            class: 'radar-email-input radar-quota-input',
+            placeholder: 'Uso',
+            value: acc.quotaUsed != null ? acc.quotaUsed : '',
+            title: 'Uso atual atingido',
+          });
+
+          const saveQuotaBtn = el('button', {
+            class: 'btn btn-secondary radar-quota-save',
+            type: 'button',
+            text: 'Salvar',
+            onclick: async () => {
+              const quotaDaily = dailyInput.value === '' ? null : Number(dailyInput.value);
+              const quotaUsed = usedInput.value === '' ? null : Number(usedInput.value);
+              try {
+                const res = await jsonFetch('/api/gateway/accounts', {
+                  method: 'POST',
+                  body: JSON.stringify({ accounts: [{ fingerprint: acc.fingerprint, email: acc.email, quotaDaily, quotaUsed }] }),
+                });
+                state.gw.data = res.snapshot || state.gw.data;
+                ctx.toast('Cota atualizada!', 'success');
+                renderGateway();
+              } catch (err) {
+                ctx.toast('Falha ao atualizar cota: ' + err.message, 'error');
+              }
+            },
+          });
+
+          // Barra de progresso se houver cota definida
+          let progressBar = null;
+          if (acc.quotaDaily && acc.quotaDaily > 0) {
+            const used = acc.quotaUsed || 0;
+            const pct = Math.min(100, Math.round((used / acc.quotaDaily) * 100));
+            const colorClass = pct >= 90 ? 'is-danger' : pct >= 75 ? 'is-warn' : 'is-ok';
+            progressBar = el('div', { class: 'radar-quota-wrap' }, [
+              el('div', { class: 'radar-quota-bar-bg' }, [
+                el('div', { class: 'radar-quota-bar-fill ' + colorClass, style: { width: pct + '%' } }),
+              ]),
+              el('span', { class: 'radar-quota-text', text: `${used} / ${acc.quotaDaily} (${pct}%)` }),
+            ]);
+          } else {
+            progressBar = el('span', { class: 'radar-muted', text: '—' });
+          }
 
           tbody.append(
             el('tr', {}, [
@@ -462,6 +516,10 @@
               ]),
               el('td', {}, [el('code', { class: 'radar-code', text: acc.masked })]),
               el('td', {}, [input]),
+              el('td', {}, [
+                el('div', { class: 'radar-quota-edit-row' }, [dailyInput, usedInput, saveQuotaBtn]),
+                progressBar,
+              ]),
               el('td', {}, [
                 ...(acc.models || []).map((name) => el('span', { class: 'radar-pill', text: name })),
                 el('button', {

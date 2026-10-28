@@ -334,9 +334,23 @@ function saveAccounts(patch, { statePath = DEFAULT_STATE, configPath = DEFAULT_C
     if (!known.has(fp)) continue;
     const email = item.email == null ? '' : String(item.email).trim().slice(0, 120);
     const label = item.label == null ? '' : String(item.label).trim().slice(0, 60);
+    const quotaDaily = item.quotaDaily != null && item.quotaDaily !== '' ? Number(item.quotaDaily) : null;
+    const quotaUsed = item.quotaUsed != null && item.quotaUsed !== '' ? Number(item.quotaUsed) : null;
+
     const current = state.accounts[fp] || {};
     const next = { email, label };
-    if (current.email !== email || current.label !== label) {
+    if (quotaDaily != null && !isNaN(quotaDaily)) next.quotaDaily = quotaDaily;
+    else if (current.quotaDaily != null) next.quotaDaily = current.quotaDaily;
+
+    if (quotaUsed != null && !isNaN(quotaUsed)) next.quotaUsed = quotaUsed;
+    else if (current.quotaUsed != null) next.quotaUsed = current.quotaUsed;
+
+    if (
+      current.email !== email ||
+      current.label !== label ||
+      current.quotaDaily !== next.quotaDaily ||
+      current.quotaUsed !== next.quotaUsed
+    ) {
       state.accounts[fp] = next;
       changed += 1;
     }
@@ -369,14 +383,17 @@ function snapshot({ configPath = DEFAULT_CONFIG, statePath = DEFAULT_STATE } = {
   const accountsMap = new Map();
   for (const dep of deployments) {
     if (!accountsMap.has(dep.fingerprint)) {
+      const accState = accountOf(dep.fingerprint) || {};
       accountsMap.set(dep.fingerprint, {
         fingerprint: dep.fingerprint,
         masked: dep.masked,
         model: dep.model,
         apiBase: dep.apiBase,
         envRef: dep.envRef,
-        email: (accountOf(dep.fingerprint) || {}).email || '',
-        label: (accountOf(dep.fingerprint) || {}).label || '',
+        email: accState.email || '',
+        label: accState.label || '',
+        quotaDaily: accState.quotaDaily ?? null,
+        quotaUsed: accState.quotaUsed ?? null,
         models: [],
       });
     }

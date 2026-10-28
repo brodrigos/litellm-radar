@@ -156,3 +156,20 @@
 .radar-details { border: 1px dashed var(--border); border-radius: var(--radius); padding: 10px 12px; }
 .radar-summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--text); }
 .radar-details > * + * { margin-top: 8px; }
+
+/* quota diária e uso */
+.radar-quota-edit-row { display: flex; gap: 6px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 6px; }
+.radar-quota-input { flex: 1 0 80px; min-width: 70px; }
+.radar-quota-save { font-size: 11px; padding: 6px 10px; }
+.radar-quota-wrap { font-size: 11px; color: var(--muted); line-height: 1.6; }
+.radar-quota-bar-bg {
+  height: 18px; background: var(--surface-3); border-radius: 99px; overflow: hidden; border: 1px solid var(--border-strong); position: relative;
+}
+.radar-quota-bar-fill {
+  height: 100%; border-radius: 99px;
+  background: var(--accent); width: 0%; transition: width 0.3s ease;
+}
+.radar-quota-bar-fill.is-ok { background: var(--success); border-color: var(--success); }
+.radar-quota-bar-fill.is-warn { background: var(--warning); border-color: var(--warning); }
+.radar-quota-bar-fill.is-danger { background: var(--danger); border-color: var(--danger); }
+.radar-quota-text { margin-top: 2px; font-size: 10px; color: var(--dim); font-variant-numeric: tabular-nums; }

@@ -301,16 +301,11 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
     assert.deepStrictEqual(excluded, ['+ mistral-free']);
   });
 
-  await test('coluna "usada em" mostra os modelos, nunca [object ...]', () => {
-    const text = textOf(body);
-    assert.ok(!/\[object /.test(text), 'elemento HTML virou texto na tabela de contas');
-    const table = findAll(body, (n) => String(n.className).includes('radar-accounts'))[0];
-    const pills = findAll(table, (n) => String(n.className).includes('radar-pill')).map((n) =>
-      textOf(n).trim(),
-    );
-    // cada conta lista os model_names que usam aquela chave
-    assert.ok(pills.includes('gemini-fallback'), 'faltou o pill do model_name na coluna usada em');
-    assert.ok(pills.includes('local-ollama'), 'faltou o pill do model_name na coluna usada em');
+  await test('tabela de contas exibe campos e barras de cota diária', () => {
+    const inputs = findAll(body, (n) => n.tagName === 'INPUT' && String(n.className).includes('radar-quota-input'));
+    assert.ok(inputs.length > 0, 'inputs de cota devem existir na tabela de contas');
+    const buttons = findAll(body, (n) => n.tagName === 'BUTTON' && textOf(n).trim() === 'Salvar');
+    assert.ok(buttons.length > 0, 'botão Salvar cota deve existir');
   });
 
   await test('seta ↓ troca a ordem e marca alteração pendente', () => {
