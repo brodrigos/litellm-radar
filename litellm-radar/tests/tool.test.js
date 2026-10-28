@@ -97,7 +97,11 @@ function el(tag, props = {}, children = []) {
   }
   for (const child of [].concat(children)) {
     if (child === null || child === undefined || child === false) continue;
-    node.append(child);
+    // O DOM real só aceita nós; qualquer outra coisa (inclusive array aninhado)
+    // vira texto via String(child) — um array de spans apareceria como
+    // "[object HTMLSpanElement],[object HTMLSpanElement]".
+    if (child && typeof child === 'object' && child.tagName) node.append(child);
+    else node.append(String(child));
   }
   return node;
 }
@@ -266,7 +270,7 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
 
   await test('rodapé tem varredura, salvar ordem e recarregar', () => {
     const labels = findAll(footer.node, (n) => n.tagName === 'BUTTON').map((n) => textOf(n).trim());
-    assert.deepStrictEqual(labels, ['Executar Varredura', 'Salvar ordem de fallback', 'Recarregar do gateway']);
+    assert.deepStrictEqual(labels, ['Executar Varredura', 'Salvar ordem de fallback', 'Recarregar do gateway', '🔄 Reiniciar LiteLLM']);
   });
 
   // abre a aba de fallback
@@ -295,6 +299,18 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
   await test('modelo fora da cadeia aparece como opção para incluir', () => {
     const excluded = findAll(body, (n) => String(n.className).includes('radar-chip-add')).map(textOf);
     assert.deepStrictEqual(excluded, ['+ mistral-free']);
+  });
+
+  await test('coluna "usada em" mostra os modelos, nunca [object ...]', () => {
+    const text = textOf(body);
+    assert.ok(!/\[object /.test(text), 'elemento HTML virou texto na tabela de contas');
+    const table = findAll(body, (n) => String(n.className).includes('radar-accounts'))[0];
+    const pills = findAll(table, (n) => String(n.className).includes('radar-pill')).map((n) =>
+      textOf(n).trim(),
+    );
+    // cada conta lista os model_names que usam aquela chave
+    assert.ok(pills.includes('gemini-fallback'), 'faltou o pill do model_name na coluna usada em');
+    assert.ok(pills.includes('local-ollama'), 'faltou o pill do model_name na coluna usada em');
   });
 
   await test('seta ↓ troca a ordem e marca alteração pendente', () => {

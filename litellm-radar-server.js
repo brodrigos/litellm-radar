@@ -110,10 +110,10 @@ async function testModel(modelId) {
 /* --------------------------------------------------------------- reload */
 
 async function restartGateway() {
-  const token = process.env.PORTAINER_TOKEN;
-  const base = (process.env.PORTAINER_URL || 'http://192.168.1.130:9000').replace(/\/$/, '');
-  const endpoint = process.env.PORTAINER_ENDPOINT || '2';
-  const container = process.env.LITELLM_CONTAINER || 'litellm';
+  const token = process.env.PORTAINER_TOKEN || readCredential('PORTAINER_TOKEN');
+  const base = (process.env.PORTAINER_URL || readCredential('PORTAINER_URL') || 'http://192.168.1.130:9000').replace(/\/$/, '');
+  const endpoint = process.env.PORTAINER_ENDPOINT || readCredential('PORTAINER_ENDPOINT') || '2';
+  const container = process.env.LITELLM_CONTAINER || readCredential('LITELLM_CONTAINER') || 'litellm';
 
   if (token) {
     try {

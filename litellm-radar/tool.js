@@ -463,7 +463,7 @@
               el('td', {}, [el('code', { class: 'radar-code', text: acc.masked })]),
               el('td', {}, [input]),
               el('td', {}, [
-                (acc.models || []).map((name) => el('span', { class: 'radar-pill', text: name })),
+                ...(acc.models || []).map((name) => el('span', { class: 'radar-pill', text: name })),
                 el('button', {
                   class: 'radar-icon-btn is-remove',
                   type: 'button',
@@ -546,9 +546,9 @@
               text: 'Aplicado aos modelos da cadeia que não estão nesta lista — hoje manda prompt grande para os modelos de 1M de contexto.',
             }),
             el('div', { class: 'radar-chain radar-chain-ctx' }, [
-              state.gw.ctx.length
+              ...(state.gw.ctx.length
                 ? state.gw.ctx.map((name, i) => chainRow(name, i, state.gw.ctx, 'ctx'))
-                : el('div', { class: 'radar-empty', text: 'Nenhum modelo marcado (context_window_fallbacks vazio).' }),
+                : [el('div', { class: 'radar-empty', text: 'Nenhum modelo marcado (context_window_fallbacks vazio).' })]),
               addRow('ctx'),
             ]),
           ]),
@@ -711,6 +711,18 @@
         }
       }
 
+      async function restartLiteLLM() {
+        try {
+          const res = await jsonFetch('/api/gateway/reload', { method: 'POST' });
+          ctx.toast(res.message || 'LiteLLM reiniciado.', 'success');
+          return res;
+        } catch (err) {
+          const message = (err.payload && err.payload.message) || err.message;
+          ctx.toast('Falha ao reiniciar LiteLLM: ' + message, 'error');
+          return null;
+        }
+      }
+
       /* ---------------------------------------------------------- rodapé */
 
       ctx.setFooter(
@@ -741,6 +753,12 @@
             type: 'button',
             text: 'Recarregar do gateway',
             onclick: () => loadGateway(),
+          }),
+          el('button', {
+            class: 'btn btn-ghost',
+            type: 'button',
+            text: '🔄 Reiniciar LiteLLM',
+            onclick: () => restartLiteLLM(),
           }),
         ]),
       );

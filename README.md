@@ -61,6 +61,11 @@ Variáveis de ambiente:
 | `PORTAINER_TOKEN` | — | habilita restart do container pelo painel |
 | `LITELLM_CONTAINER` | `litellm` | nome do container no Portainer |
 
+> O `PORTAINER_TOKEN` pode ser definido como variável de ambiente ou adicionado ao cofre de credenciais do DSH
+> (`~/.dsh/.credentials.yaml`, chave `PORTAINER_TOKEN`). Quando configurado, o botão “🔄 Reiniciar LiteLLM”
+> no painel reinicia o container automaticamente via API do Portainer. Sem o token, o servidor apenas avisa que
+> o restart deve ser feito manualmente no Portainer.
+
 ## Integração com o Brodrigos Dashboard
 
 A ferramenta é descoberta por `manifest.json` + `tool.js` e apontada em
