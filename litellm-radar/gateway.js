@@ -434,6 +434,110 @@ function snapshot({ configPath = DEFAULT_CONFIG, statePath = DEFAULT_STATE } = {
   };
 }
 
+function addAccount({ modelName, apiKey, email, label, apiBase, timeout }, { configPath = DEFAULT_CONFIG, statePath = DEFAULT_STATE } = {}) {
+  const name = String(modelName || '').trim();
+  const key = String(apiKey || '').trim();
+  if (!name || !key) throw new Error('modelName e apiKey são obrigatórios');
+
+  const { text, data } = readConfig(configPath);
+  const modelList = Array.isArray(data.model_list) ? data.model_list : [];
+
+  // Pega uma referência de modelo existente com esse name para copiar parâmetros padrão (model, api_base, timeout, etc.)
+  const ref = modelList.find((m) => String(m.model_name) === name) || modelList[0];
+  const refParams = (ref && ref.litellm_params) || {};
+
+  const newEntry = {
+    model_name: name,
+    litellm_params: {
+      model: refParams.model || 'openai/' + name,
+      api_base: apiBase != null ? String(apiBase) : (refParams.api_base || undefined),
+      api_key: key,
+      timeout: timeout != null ? Number(timeout) : (refParams.timeout || 60),
+    },
+  };
+  if (refParams.max_parallel_requests != null) newEntry.litellm_params.max_parallel_requests = refParams.max_parallel_requests;
+  if (refParams.rpm != null) newEntry.litellm_params.rpm = refParams.rpm;
+  if (refParams.max_retries != null) newEntry.litellm_params.max_retries = refParams.max_retries;
+
+  if (email || label) {
+    newEntry.model_info = {
+      notes: `Adicionado via LiteLLM Radar — conta ${email || '—'}`,
+    };
+  }
+
+  // Insere antes de litellm_settings
+  const lines = text.split(/\r?\n/);
+  const eol = eolOf(text);
+  const insertAt = lines.findIndex((l) => /^litellm_settings:\s*$/.test(l));
+  if (insertAt < 0) throw new Error('bloco litellm_settings não encontrado');
+
+  const rendered = YAML.stringify([newEntry], { sortKeys: false });
+  const head = lines.slice(0, insertAt);
+  const tail = lines.slice(insertAt);
+  const updatedText = head.concat(rendered.split(/\r?\n/), '', tail).join(eol);
+
+  // Validação
+  const parsed = YAML.parse(updatedText) || {};
+  const newModelList = Array.isArray(parsed.model_list) ? parsed.model_list : [];
+  if (newModelList.length !== modelList.length + 1) {
+    throw new Error('validação falhou ao adicionar chave');
+  }
+
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 13);
+  const backup = `${configPath}.bak-radar-${stamp}`;
+  fs.copyFileSync(configPath, backup);
+  fs.writeFileSync(configPath, updatedText, 'utf8');
+
+  const fp = fingerprint(key);
+  if (email || label) {
+    const state = readState(statePath);
+    state.accounts[fp] = {
+      email: email ? String(email).trim() : '',
+      label: label ? String(label).trim() : '',
+    };
+    writeState(state, statePath);
+  }
+
+  return { ok: true, backup: path.basename(backup), fingerprint: fp };
+}
+
+function removeAccount({ fingerprint: targetFp }, { configPath = DEFAULT_CONFIG, statePath = DEFAULT_STATE } = {}) {
+  const fp = String(targetFp || '').trim();
+  if (!fp) throw new Error('fingerprint obrigatório');
+
+  const { text, data } = readConfig(configPath);
+  const modelList = Array.isArray(data.model_list) ? data.model_list : [];
+
+  let removed = 0;
+  const filteredList = modelList.filter((m) => {
+    const k = (m.litellm_params || {}).api_key;
+    const thisFp = fingerprint(k);
+    if (thisFp === fp) {
+      removed += 1;
+      return false;
+    }
+    return true;
+  });
+
+  if (removed === 0) throw new Error('nenhuma chave encontrada com esse fingerprint');
+
+  data.model_list = filteredList;
+  const updatedText = YAML.stringify(data, { sortKeys: false });
+
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 13);
+  const backup = `${configPath}.bak-radar-${stamp}`;
+  fs.copyFileSync(configPath, backup);
+  fs.writeFileSync(configPath, updatedText, 'utf8');
+
+  const state = readState(statePath);
+  if (state.accounts[fp]) {
+    delete state.accounts[fp];
+    writeState(state, statePath);
+  }
+
+  return { ok: true, backup: path.basename(backup), removed };
+}
+
 module.exports = {
   DEFAULT_CONFIG,
   DEFAULT_STATE,
@@ -447,5 +551,7 @@ module.exports = {
   renderContextWindow,
   saveChain,
   saveAccounts,
+  addAccount,
+  removeAccount,
   snapshot,
 };

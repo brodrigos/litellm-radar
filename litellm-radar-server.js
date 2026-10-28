@@ -224,6 +224,18 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, ...result, snapshot: gateway.snapshot() });
     }
 
+    if (route === '/api/gateway/account/add' && req.method === 'POST') {
+      const body = await readBody(req);
+      const result = gateway.addAccount(body);
+      return sendJson(res, 200, { ok: true, ...result, snapshot: gateway.snapshot() });
+    }
+
+    if (route === '/api/gateway/account/remove' && req.method === 'POST') {
+      const body = await readBody(req);
+      const result = gateway.removeAccount(body);
+      return sendJson(res, 200, { ok: true, ...result, snapshot: gateway.snapshot() });
+    }
+
     if (route === '/api/gateway/chain' && req.method === 'POST') {
       const body = await readBody(req);
       if (!Array.isArray(body.chain)) {

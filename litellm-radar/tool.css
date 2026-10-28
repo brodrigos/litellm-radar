@@ -147,6 +147,11 @@
 .radar-email-input::placeholder { color: var(--dim); }
 .radar-email-input:focus { outline: none; border-color: var(--accent-line); }
 
+.radar-add-key-box { background: var(--surface-2); padding: 12px; border-radius: var(--radius); border: 1px solid var(--border); }
+.radar-add-key-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 8px; }
+.radar-add-key-grid label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+.radar-add-key-grid .radar-select, .radar-add-key-grid .radar-email-input { width: 100%; }
+
 /* detalhes colapsáveis */
 .radar-details { border: 1px dashed var(--border); border-radius: var(--radius); padding: 10px 12px; }
 .radar-summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--text); }

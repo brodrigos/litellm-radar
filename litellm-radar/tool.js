@@ -462,7 +462,29 @@
               ]),
               el('td', {}, [el('code', { class: 'radar-code', text: acc.masked })]),
               el('td', {}, [input]),
-              el('td', {}, (acc.models || []).map((name) => el('span', { class: 'radar-pill', text: name }))),
+              el('td', {}, [
+                (acc.models || []).map((name) => el('span', { class: 'radar-pill', text: name })),
+                el('button', {
+                  class: 'radar-icon-btn is-remove',
+                  type: 'button',
+                  title: 'apagar esta chave do config.yaml',
+                  text: '🗑️',
+                  onclick: async () => {
+                    if (!confirm('Apagar a chave ' + acc.masked + ' do config.yaml?')) return;
+                    try {
+                      const res = await jsonFetch('/api/gateway/account/remove', {
+                        method: 'POST',
+                        body: JSON.stringify({ fingerprint: acc.fingerprint }),
+                      });
+                      state.gw.data = res.snapshot || state.gw.data;
+                      ctx.toast('Chave removida (' + res.removed + ' entrada(s))', 'success');
+                      renderGateway();
+                    } catch (err) {
+                      ctx.toast('Falha ao remover: ' + err.message, 'error');
+                    }
+                  },
+                }),
+              ]),
             ]),
           );
         }
@@ -539,6 +561,61 @@
           ),
         );
         gwBody.append(renderAccounts());
+
+        // Formulário para adicionar nova chave/conta
+        const allModelNames = (state.gw.data.models || []).map((m) => m.name);
+        const addModelSelect = el('select', { class: 'radar-select' });
+        for (const name of allModelNames) addModelSelect.append(el('option', { value: name, text: name }));
+
+        const addKeyInput = el('input', {
+          type: 'text',
+          class: 'radar-email-input',
+          placeholder: 'sk-... ou token',
+        });
+        const addEmailInput = el('input', {
+          type: 'text',
+          class: 'radar-email-input',
+          placeholder: 'conta@exemplo.com',
+        });
+        const addBtn = el('button', {
+          class: 'btn btn-primary',
+          type: 'button',
+          text: '+ Adicionar Chave',
+          onclick: async () => {
+            const modelName = addModelSelect.value;
+            const apiKey = addKeyInput.value.trim();
+            const email = addEmailInput.value.trim();
+            if (!apiKey) {
+              ctx.toast('Informe a API Key', 'warning');
+              return;
+            }
+            try {
+              const res = await jsonFetch('/api/gateway/account/add', {
+                method: 'POST',
+                body: JSON.stringify({ modelName, apiKey, email }),
+              });
+              state.gw.data = res.snapshot || state.gw.data;
+              addKeyInput.value = '';
+              addEmailInput.value = '';
+              ctx.toast('Chave adicionada com sucesso!', 'success');
+              renderGateway();
+            } catch (err) {
+              ctx.toast('Falha ao adicionar: ' + err.message, 'error');
+            }
+          },
+        });
+
+        gwBody.append(
+          el('div', { class: 'radar-chain radar-add-key-box' }, [
+            el('h4', { class: 'radar-section-title', text: 'Adicionar nova chave / conta' }),
+            el('div', { class: 'radar-add-key-grid' }, [
+              el('div', {}, [el('label', { text: 'Modelo alvo' }), addModelSelect]),
+              el('div', {}, [el('label', { text: 'API Key' }), addKeyInput]),
+              el('div', {}, [el('label', { text: 'E-mail (opcional)' }), addEmailInput]),
+            ]),
+            el('div', { style: { 'margin-top': '8px' } }, [addBtn]),
+          ]),
+        );
 
         const excluded = (data.models || []).filter((m) => !state.gw.chain.includes(m.name));
         if (excluded.length) {
