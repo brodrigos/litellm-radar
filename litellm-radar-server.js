@@ -107,13 +107,100 @@ async function testModel(modelId) {
   }
 }
 
-/* --------------------------------------------------------------- reload */
+/* --------------------------------------------------------------- uso automático */
 
-async function restartGateway() {
-  const token = process.env.PORTAINER_TOKEN || readCredential('PORTAINER_TOKEN');
+let cachedUsageCounts = {};
+let lastFetchTime = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
+async function backgroundRefreshUsage() {
+  return new Promise((resolve) => {
+    const counts = {};
+    const req = http.get({
+      hostname: LITELLM_HOST,
+      port: LITELLM_PORT,
+      path: '/spend/logs',
+      headers: { 'Authorization': 'Bearer 1234' },
+      timeout: 20000,
+    }, res => {
+      let d = '';
+      res.on('data', c => d += c);
+      res.on('end', () => {
+        try {
+          const logs = JSON.parse(d);
+          logs.forEach(l => {
+            const group = l.model_group;
+            const model = l.model || '';
+            if (group) counts[group] = (counts[group] || 0) + 1;
+            if (model) {
+              counts[model] = (counts[model] || 0) + 1;
+              const parts = model.split('/');
+              const last = parts[parts.length - 1].split(':')[0];
+              if (last) counts[last] = (counts[last] || 0) + 1;
+            }
+          });
+          cachedUsageCounts = counts;
+          lastFetchTime = Date.now();
+          resolve(counts);
+        } catch (e) {
+          resolve(cachedUsageCounts);
+        }
+      });
+    });
+    req.on('error', () => resolve(cachedUsageCounts));
+    req.on('timeout', () => { req.destroy(); resolve(cachedUsageCounts); });
+  });
+}
+
+async function fetchLiteLLMUsageCounts() {
+  if (Object.keys(cachedUsageCounts).length === 0) {
+    await backgroundRefreshUsage();
+    return cachedUsageCounts;
+  }
+  if (Date.now() - lastFetchTime > CACHE_TTL_MS) {
+    backgroundRefreshUsage().catch(() => {});
+  }
+  return cachedUsageCounts;
+}
+
+async function getEnrichedSnapshot() {
+  const snap = gateway.snapshot();
+  const usageMap = await fetchLiteLLMUsageCounts();
+  if (snap && Array.isArray(snap.models)) {
+    snap.models.forEach(m => {
+      const realUsage =
+        usageMap[m.name] ||
+        usageMap[m.name.toLowerCase()] ||
+        usageMap[m.model] ||
+        0;
+      if (realUsage > 0) {
+        m.quotaUsed = realUsage;
+      }
+    });
+  }
+  if (snap && Array.isArray(snap.accounts)) {
+    snap.accounts.forEach(acc => {
+      let total = 0;
+      (acc.models || []).forEach(mName => {
+        total +=
+          usageMap[mName] ||
+          usageMap[mName.toLowerCase()] ||
+          usageMap['or-' + mName] ||
+          usageMap[mName.replace(/^or-/, '')] ||
+          0;
+      });
+      if (total > 0 && (acc.quotaUsed == null || acc.quotaUsed === 0)) {
+        acc.quotaUsed = total;
+      }
+    });
+  }
+  return snap;
+}
+
+async function restartGateway() {  const token = process.env.PORTAINER_TOKEN || readCredential('PORTAINER_TOKEN');
   const base = (process.env.PORTAINER_URL || readCredential('PORTAINER_URL') || 'http://192.168.1.130:9000').replace(/\/$/, '');
   const endpoint = process.env.PORTAINER_ENDPOINT || readCredential('PORTAINER_ENDPOINT') || '2';
-  const container = process.env.LITELLM_CONTAINER || readCredential('LITELLM_CONTAINER') || 'litellm';
+  const container = process.env.LITELLM_CONTAINER || readCredential('LITELLM_CONTAINER') || 'litellm-gateway';
 
   if (token) {
     try {
@@ -123,7 +210,10 @@ async function restartGateway() {
       if (listResp.ok) {
         const containers = await listResp.json();
         const hit = (containers || []).find((c) =>
-          (c.Names || []).some((n) => n.replace(/^\//, '') === container),
+          (c.Names || []).some((n) => {
+            const clean = n.replace(/^\//, '');
+            return clean === container || clean.includes('litellm');
+          }),
         );
         if (hit) {
           const r = await fetch(
@@ -215,7 +305,8 @@ const server = http.createServer(async (req, res) => {
 
     /* ---------------------------------------------- gateway: contas/fallback */
     if (route === '/api/gateway' && req.method === 'GET') {
-      return sendJson(res, 200, gateway.snapshot());
+      const snap = await getEnrichedSnapshot();
+      return sendJson(res, 200, snap);
     }
 
     if (route === '/api/gateway/accounts' && req.method === 'POST') {
