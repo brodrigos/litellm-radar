@@ -129,14 +129,15 @@ async function backgroundRefreshUsage() {
         try {
           const logs = JSON.parse(d);
           logs.forEach(l => {
+            const tokens = l.total_tokens || ((l.prompt_tokens || 0) + (l.completion_tokens || 0)) || 1;
             const group = l.model_group;
             const model = l.model || '';
-            if (group) counts[group] = (counts[group] || 0) + 1;
+            if (group) counts[group] = (counts[group] || 0) + tokens;
             if (model) {
-              counts[model] = (counts[model] || 0) + 1;
+              counts[model] = (counts[model] || 0) + tokens;
               const parts = model.split('/');
               const last = parts[parts.length - 1].split(':')[0];
-              if (last) counts[last] = (counts[last] || 0) + 1;
+              if (last) counts[last] = (counts[last] || 0) + tokens;
             }
           });
           cachedUsageCounts = counts;

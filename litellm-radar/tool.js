@@ -489,20 +489,31 @@
             },
           });
 
-          // Barra de progresso se houver cota definida
+          // Formata número de tokens de forma legível
+          const formatTokens = (n) => {
+            if (n == null || isNaN(n)) return '0';
+            if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+            if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+            if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+            return String(n);
+          };
+
+          // Barra de progresso ou exibição de tokens usados
           let progressBar = null;
+          const used = acc.quotaUsed || 0;
           if (acc.quotaDaily && acc.quotaDaily > 0) {
-            const used = acc.quotaUsed || 0;
             const pct = Math.min(100, Math.round((used / acc.quotaDaily) * 100));
             const colorClass = pct >= 90 ? 'is-danger' : pct >= 75 ? 'is-warn' : 'is-ok';
             progressBar = el('div', { class: 'radar-quota-wrap' }, [
               el('div', { class: 'radar-quota-bar-bg' }, [
                 el('div', { class: 'radar-quota-bar-fill ' + colorClass, style: { width: pct + '%' } }),
               ]),
-              el('span', { class: 'radar-quota-text', text: `${used} / ${acc.quotaDaily} (${pct}%)` }),
+              el('span', { class: 'radar-quota-text', text: `${formatTokens(used)} / ${formatTokens(acc.quotaDaily)} (${pct}%)` }),
             ]);
           } else {
-            progressBar = el('span', { class: 'radar-muted', text: '—' });
+            progressBar = el('div', { class: 'radar-quota-wrap' }, [
+              el('span', { class: 'radar-quota-text', text: `Consumido: ${formatTokens(used)} tokens (defina Máx para barra)` }),
+            ]);
           }
 
           tbody.append(
