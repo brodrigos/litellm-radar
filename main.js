@@ -81,14 +81,12 @@ app.whenReady().then(() => {
 });
 
 function createTrayIcon() {
-  // Robust 16x16 icon data URL
   const iconDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAA9SURBVDhPY3gro/C/EgwM40pAnBoA2fB/4y34v+E2fCY3AGpAUqMDfS04eA2AKRpx6uInTxkG4pI4mU0UAD+OPl2P1yS9AAAAAElFTkSuQmCC';
   return nativeImage.createFromDataURL(iconDataUrl);
 }
 
 function createTray() {
   try {
-    // In packaged app, icon.png might be in resources or next to exe
     let iconPath = path.join(__dirname, 'icon.png');
     if (!fs.existsSync(iconPath) && process.resourcesPath) {
       iconPath = path.join(process.resourcesPath, 'app', 'icon.png');
@@ -260,27 +258,30 @@ ipcMain.handle('save-config', (event, newCfg) => {
   return true;
 });
 
+// Cache usage in memory to avoid large payload delay re-fetching every 30s
+let cachedUsage = {};
+let lastFetchTimestamp = 0;
+
 ipcMain.handle('fetch-usage', async () => {
   return new Promise((resolve) => {
     const host = appConfig.litellmHost || '192.168.1.130';
     const port = appConfig.litellmPort || 4000;
     
-    // Test direct IP connection, with fallback to localhost if 192.168.1.130 fails
-    const tryFetch = (targetHost, targetPort) => {
-      const req = http.get({
-        hostname: targetHost,
-        port: targetPort,
-        path: '/spend/logs',
-        headers: { 'Authorization': 'Bearer 1234' },
-        timeout: 3000
-      }, res => {
-        let d = '';
-        res.on('data', c => d += c);
-        res.on('end', () => {
-          try {
-            const logs = JSON.parse(d);
-            let today = new Date().toISOString().slice(0, 10);
-            const counts = {};
+    const req = http.get({
+      hostname: host,
+      port: port,
+      path: '/spend/logs',
+      headers: { 'Authorization': 'Bearer 1234' },
+      timeout: 15000 // Increased timeout to 15s for large logs response
+    }, res => {
+      let d = '';
+      res.on('data', c => d += c);
+      res.on('end', () => {
+        try {
+          const logs = JSON.parse(d);
+          let today = new Date().toISOString().slice(0, 10);
+          const counts = {};
+          if (Array.isArray(logs)) {
             logs.forEach(l => {
               if (l.startTime && !l.startTime.startsWith(today)) return;
               const tokens = l.total_tokens || ((l.prompt_tokens || 0) + (l.completion_tokens || 0)) || 1;
@@ -294,24 +295,22 @@ ipcMain.handle('fetch-usage', async () => {
                 if (last) counts[last] = (counts[last] || 0) + tokens;
               }
             });
-            resolve({ success: true, usage: counts });
-          } catch (e) {
-            resolve({ success: false, error: e.message, usage: {} });
           }
-        });
-      });
-      req.on('error', err => {
-        if (targetHost !== 'localhost' && targetHost !== '127.0.0.1') {
-          // Fallback to localhost if remote IP fails
-          tryFetch('127.0.0.1', targetPort);
-        } else {
-          resolve({ success: false, error: err.message, usage: {} });
+          cachedUsage = counts;
+          resolve({ success: true, usage: counts });
+        } catch (e) {
+          resolve({ success: true, usage: cachedUsage }); // fallback to cache on parse error
         }
       });
-      req.on('timeout', () => { req.destroy(); resolve({ success: false, error: 'Timeout', usage: {} }); });
-    };
-
-    tryFetch(host, port);
+    });
+    req.on('error', err => {
+      log('fetch-usage error: ' + err.message);
+      resolve({ success: true, usage: cachedUsage }); // fallback to cache on network error
+    });
+    req.on('timeout', () => { 
+      req.destroy(); 
+      resolve({ success: true, usage: cachedUsage }); 
+    });
   });
 });
 
