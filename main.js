@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -80,6 +80,15 @@ app.whenReady().then(() => {
   log('App whenReady error: ' + err.message);
 });
 
+function createTrayIcon() {
+  // Create a crisp 16x16 icon in memory so tray always renders even without icon.png
+  const size = 16;
+  const img = nativeImage.createEmpty();
+  // We can use a clean SVG converted to data URL or a visible data URL PNG
+  const iconDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAA9SURBVDhPY3gro/C/EgwM40pAnBoA2fB/4y34v+E2fCY3AGpAUqMDfS04eA2AKRpx6uInTxkG4pI4mU0UAD+OPl2P1yS9AAAAAElFTkSuQmCC';
+  return nativeImage.createFromDataURL(iconDataUrl);
+}
+
 function createTray() {
   try {
     const iconPath = path.join(__dirname, 'icon.png');
@@ -87,17 +96,21 @@ function createTray() {
     if (fs.existsSync(iconPath)) {
       icon = nativeImage.createFromPath(iconPath);
     } else {
-      icon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAHUlEQVQ4jWNgGAWjYBSMglEwCkbBSAcgDo5aAAAAP//8L3dYwAAAABJRU5ErkJggg==');
+      icon = createTrayIcon();
     }
 
     tray = new Tray(icon);
-    tray.setToolTip('LiteLLM Cons');
+    tray.setToolTip('LiteLLM Cons (Clique para abrir)');
     updateTrayContextMenu();
 
     tray.on('click', (event, bounds) => {
       toggleMainWindow(bounds);
     });
     
+    tray.on('double-click', (event, bounds) => {
+      toggleMainWindow(bounds);
+    });
+
     tray.on('right-click', () => {
       tray.popUpContextMenu();
     });
@@ -109,10 +122,22 @@ function createTray() {
 
 function updateTrayContextMenu() {
   const contextMenu = Menu.buildFromTemplate([
-    { label: 'LiteLLM Cons (Monitor)', click: () => toggleMainWindow() },
-    { label: 'Configurações (Max Tokens)', click: () => openSettingsWindow() },
+    { 
+      label: 'LiteLLM Cons (Exibir/Ocultar)', 
+      click: () => toggleMainWindow() 
+    },
+    { 
+      label: 'Configurações (Max Tokens)', 
+      click: () => openSettingsWindow() 
+    },
     { type: 'separator' },
-    { label: 'Sair', click: () => { app.isQuitting = true; app.quit(); } }
+    { 
+      label: 'Sair', 
+      click: () => { 
+        app.isQuitting = true; 
+        app.quit(); 
+      } 
+    }
   ]);
   tray.setContextMenu(contextMenu);
 }
@@ -122,11 +147,11 @@ function createMainWindow() {
     mainWindow = new BrowserWindow({
       width: 380,
       height: 520,
-      show: false, // Start hidden, user clicks tray icon to open
+      show: true, // Show on launch so the user sees the floating panel right away!
       frame: false,
       transparent: true,
       alwaysOnTop: true,
-      skipTaskbar: true,
+      skipTaskbar: false, // Keep in taskbar for easy access & visibility on Windows
       resizable: false,
       webPreferences: {
         nodeIntegration: true,
@@ -136,7 +161,14 @@ function createMainWindow() {
 
     mainWindow.loadFile(path.join(__dirname, 'tray-panel.html'));
 
-    // Prevent window destruction on close, just hide it
+    // Position window in bottom right corner near tray on startup
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+    const windowWidth = 380;
+    const windowHeight = 520;
+    mainWindow.setPosition(screenWidth - windowWidth - 20, screenHeight - windowHeight - 20);
+
+    // Prevent destruction on close
     mainWindow.on('close', (e) => {
       if (!app.isQuitting) {
         e.preventDefault();
@@ -149,6 +181,7 @@ function createMainWindow() {
         mainWindow.hide();
       }
     });
+
     log('Main window created');
   } catch (e) {
     log('createMainWindow error: ' + e.message);
@@ -161,7 +194,7 @@ function toggleMainWindow(bounds) {
   if (mainWindow.isVisible()) {
     mainWindow.hide();
   } else {
-    if (bounds) {
+    if (bounds && bounds.x && bounds.y) {
       const { x, y } = bounds;
       const windowWidth = 380;
       const windowHeight = 520;
@@ -170,7 +203,11 @@ function toggleMainWindow(bounds) {
       if (posY < 0) posY = y + 30;
       mainWindow.setPosition(Math.round(posX), Math.round(posY));
     } else {
-      mainWindow.center();
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+      const windowWidth = 380;
+      const windowHeight = 520;
+      mainWindow.setPosition(screenWidth - windowWidth - 20, screenHeight - windowHeight - 20);
     }
     mainWindow.show();
     mainWindow.focus();
