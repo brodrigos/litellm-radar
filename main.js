@@ -122,7 +122,7 @@ function createMainWindow() {
     mainWindow = new BrowserWindow({
       width: 380,
       height: 520,
-      show: true,
+      show: false, // Start hidden, user clicks tray icon to open
       frame: false,
       transparent: true,
       alwaysOnTop: true,
@@ -135,6 +135,14 @@ function createMainWindow() {
     });
 
     mainWindow.loadFile(path.join(__dirname, 'tray-panel.html'));
+
+    // Prevent window destruction on close, just hide it
+    mainWindow.on('close', (e) => {
+      if (!app.isQuitting) {
+        e.preventDefault();
+        mainWindow.hide();
+      }
+    });
 
     mainWindow.on('blur', () => {
       if (mainWindow && mainWindow.isVisible() && (!settingsWindow || !settingsWindow.isVisible())) {
@@ -227,7 +235,7 @@ ipcMain.handle('fetch-usage', async () => {
       res.on('end', () => {
         try {
           const logs = JSON.parse(d);
-          const today = new Date().toISOString().slice(0, 10);
+          let today = new Date().toISOString().slice(0, 10);
           const counts = {};
           logs.forEach(l => {
             if (l.startTime && !l.startTime.startsWith(today)) return;
