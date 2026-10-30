@@ -249,6 +249,10 @@ ipcMain.handle('get-config', () => {
   return appConfig;
 });
 
+ipcMain.handle('open-settings-window', () => {
+  openSettingsWindow();
+});
+
 ipcMain.handle('save-config', (event, newCfg) => {
   appConfig = newCfg;
   saveConfig(appConfig);

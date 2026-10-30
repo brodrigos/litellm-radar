@@ -179,9 +179,7 @@
         }
 
         function openSettings() {
-            ipcRenderer.invoke('get-config').then(() => {
-                // Settings triggered
-            });
+            ipcRenderer.invoke('open-settings-window');
         }
 
         function hideWindow() {
