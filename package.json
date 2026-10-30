@@ -1,0 +1,31 @@
+{
+  "name": "litellm-cons",
+  "version": "1.0.0",
+  "author": "Brodrigos",
+  "description": "LiteLLM Cons - App de System Tray com painel flutuante e barras de consumo por modelo.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.litellm.cons",
+    "productName": "LiteLLM Cons",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "files": [
+      "main.js",
+      "tray-panel.html",
+      "settings.html",
+      "package.json"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^24.22.1",
+    "electron-builder": "^24.13.3"
+  }
+}

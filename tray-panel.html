@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>LiteLLM Cons</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: 20px;
+            border: 1px solid rgba(51, 65, 85, 0.6);
+            overflow: hidden;
+            user-select: none;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(100, 116, 139, 0.4);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(100, 116, 139, 0.7);
+        }
+    </style>
+</head>
+<body class="text-slate-100 h-screen flex flex-col font-sans">
+    <!-- Header / Drag region -->
+    <div class="px-4 py-3 bg-slate-900/80 border-b border-slate-800 flex justify-between items-center" style="-webkit-app-region: drag;">
+        <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                <i class="fa-solid fa-bolt-lightning text-sm"></i>
+            </div>
+            <div>
+                <h1 class="text-sm font-bold tracking-tight text-white leading-none">LiteLLM Cons</h1>
+                <span class="text-[10px] text-slate-400 font-medium">Consumo por Modelo (Hoje)</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-1.5" style="-webkit-app-region: no-drag;">
+            <button onclick="refreshData()" title="Atualizar" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors">
+                <i class="fa-solid fa-rotate text-xs" id="refresh-icon"></i>
+            </button>
+            <button onclick="openSettings()" title="Configurações" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors">
+                <i class="fa-solid fa-gear text-xs"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Models List Container -->
+    <div id="models-list" class="flex-1 overflow-y-auto p-4 space-y-3">
+        <div class="text-center py-12 text-slate-500">
+            <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
+            <p class="text-xs">Carregando consumo...</p>
+        </div>
+    </div>
+
+    <!-- Footer Status -->
+    <div class="px-4 py-2.5 bg-slate-900/90 border-t border-slate-800 text-[11px] text-slate-400 flex justify-between items-center">
+        <div class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" id="status-dot"></span>
+            <span id="status-text">Conectado ao Gateway</span>
+        </div>
+        <span id="last-update" class="text-slate-500">-</span>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        let config = {
+            maxTokens: {
+                default: 100000,
+                'groq-fast': 131072,
+                'gemini-fallback': 1000000,
+                'or-super-vl': 1000000,
+                'or-flint': 100000,
+                'or-lightning': 100000,
+                'or-north': 100000,
+                'cloudflare-last': 128000
+            }
+        };
+
+        const standardModels = [
+            { id: 'groq-fast', name: 'groq-fast', color: 'from-indigo-500 to-blue-500' },
+            { id: 'gemini-fallback', name: 'gemini-fallback', color: 'from-blue-500 to-cyan-500' },
+            { id: 'or-super-vl', name: 'or-super-vl', color: 'from-emerald-500 to-teal-500' },
+            { id: 'or-flint', name: 'or-flint', color: 'from-amber-500 to-orange-500' },
+            { id: 'or-lightning', name: 'or-lightning', color: 'from-purple-500 to-pink-500' },
+            { id: 'or-north', name: 'or-north', color: 'from-rose-500 to-red-500' },
+            { id: 'cloudflare-last', name: 'cloudflare-last', color: 'from-violet-500 to-purple-500' }
+        ];
+
+        async function init() {
+            try {
+                const cfg = await ipcRenderer.invoke('get-config');
+                if (cfg && cfg.maxTokens) {
+                    config = cfg;
+                }
+            } catch (e) {}
+            refreshData();
+            // Auto refresh every 30s
+            setInterval(refreshData, 30000);
+        }
+
+        async function refreshData() {
+            const icon = document.getElementById('refresh-icon');
+            if (icon) icon.classList.add('fa-spin');
+
+            const res = await ipcRenderer.invoke('fetch-usage');
+            
+            if (icon) {
+                setTimeout(() => icon.classList.remove('fa-spin'), 500);
+            }
+
+            const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            document.getElementById('last-update').innerText = now;
+
+            const usageMap = res.success ? res.usage : {};
+            
+            if (!res.success && Object.keys(usageMap).length === 0) {
+                document.getElementById('status-dot').className = 'w-2 h-2 rounded-full bg-rose-500';
+                document.getElementById('status-text').innerText = 'Erro ao conectar';
+            } else {
+                document.getElementById('status-dot').className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+                document.getElementById('status-text').innerText = 'Conectado ao Gateway';
+            }
+
+            renderModels(usageMap);
+        }
+
+        function renderModels(usageMap) {
+            const container = document.getElementById('models-list');
+            container.innerHTML = '';
+
+            standardModels.forEach(m => {
+                const used = usageMap[m.id] || usageMap[m.name] || usageMap['litellm/' + m.id] || 0;
+                const max = (config.maxTokens && config.maxTokens[m.id]) || config.maxTokens?.default || 100000;
+                const percent = Math.min(100, Math.max(1, Math.round((used / max) * 100)));
+
+                const card = document.createElement('div');
+                card.className = 'bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 shadow-sm hover:border-slate-700 transition-all';
+                
+                card.innerHTML = `
+                    <div class="flex justify-between items-center mb-1.5">
+                        <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+                            ${m.name}
+                        </span>
+                        <div class="text-[11px] font-mono text-slate-300">
+                            <span class="font-bold text-indigo-400">${formatTokens(used)}</span>
+                            <span class="text-slate-500">/ ${formatTokens(max)}</span>
+                        </div>
+                    </div>
+                    <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800/50">
+                        <div class="bg-gradient-to-r ${m.color} h-full rounded-full transition-all duration-500" style="width: ${percent}%"></div>
+                    </div>
+                    <div class="flex justify-between items-center mt-1 text-[10px] text-slate-500">
+                        <span>Uso diário</span>
+                        <span>${percent}%</span>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function formatTokens(n) {
+            if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+            if (n >= 1000) return (n / 1000).toFixed(0) + 'k';
+            return n.toString();
+        }
+
+        function openSettings() {
+            ipcRenderer.invoke('get-config').then(() => {
+                // Settings is opened by main process via tray menu or we can add a shortcut
+            });
+        }
+
+        ipcRenderer.on('config-updated', (event, newCfg) => {
+            config = newCfg;
+            refreshData();
+        });
+
+        init();
+    </script>
+</body>
+</html>

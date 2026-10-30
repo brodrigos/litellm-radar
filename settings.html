@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>LiteLLM Cons - Configurações</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans p-6">
+    <div class="max-w-md mx-auto">
+        <div class="flex items-center gap-3 mb-6">
+            <div class="p-3 bg-indigo-600/20 border border-indigo-500/30 rounded-xl text-indigo-400 text-xl">
+                <i class="fa-solid fa-gear"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-extrabold tracking-tight text-white">Configurações</h1>
+                <p class="text-xs text-slate-400">Edite os limites máximos de tokens por modelo.</p>
+            </div>
+        </div>
+
+        <form id="settings-form" class="space-y-4">
+            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-4">
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-indigo-400 mb-2">Limites de Max Tokens</h2>
+                
+                <div class="space-y-3" id="tokens-inputs">
+                    <!-- Dynamic inputs injected here -->
+                </div>
+            </div>
+
+            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-3">
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-indigo-400">Gateway LiteLLM</h2>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] text-slate-400 mb-1">Host</label>
+                        <input type="text" id="host-input" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-slate-400 mb-1">Porta</label>
+                        <input type="number" id="port-input" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 pt-2">
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-600/30 transition-all">
+                    Salvar Configurações
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        const standardModels = [
+            'groq-fast',
+            'gemini-fallback',
+            'or-super-vl',
+            'or-flint',
+            'or-lightning',
+            'or-north',
+            'cloudflare-last'
+        ];
+
+        async function init() {
+            const cfg = await ipcRenderer.invoke('get-config');
+            
+            document.getElementById('host-input').value = cfg.litellmHost || '192.168.1.130';
+            document.getElementById('port-input').value = cfg.litellmPort || 4000;
+
+            const container = document.getElementById('tokens-inputs');
+            container.innerHTML = '';
+
+            standardModels.forEach(m => {
+                const val = cfg.maxTokens?.[m] || cfg.maxTokens?.default || 100000;
+                const div = document.createElement('div');
+                div.className = 'flex items-center justify-between gap-3';
+                div.innerHTML = `
+                    <span class="text-xs font-medium text-slate-300 w-36 truncate" title="${m}">${m}</span>
+                    <input type="number" data-model="${m}" value="${val}" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500">
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        document.getElementById('settings-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const cfg = await ipcRenderer.invoke('get-config');
+            
+            cfg.litellmHost = document.getElementById('host-input').value;
+            cfg.litellmPort = Number(document.getElementById('port-input').value);
+
+            if (!cfg.maxTokens) cfg.maxTokens = {};
+            
+            document.querySelectorAll('#tokens-inputs input').forEach(input => {
+                const model = input.getAttribute('data-model');
+                cfg.maxTokens[model] = Number(input.value) || 100000;
+            });
+
+            await ipcRenderer.invoke('save-config', cfg);
+            window.close();
+        });
+
+        init();
+    </script>
+</body>
+</html>
