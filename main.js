@@ -81,14 +81,19 @@ app.whenReady().then(() => {
 });
 
 function createTrayIcon() {
-  // Simple 16x16 icon data URL
+  // Robust 16x16 icon data URL
   const iconDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAA9SURBVDhPY3gro/C/EgwM40pAnBoA2fB/4y34v+E2fCY3AGpAUqMDfS04eA2AKRpx6uInTxkG4pI4mU0UAD+OPl2P1yS9AAAAAElFTkSuQmCC';
   return nativeImage.createFromDataURL(iconDataUrl);
 }
 
 function createTray() {
   try {
-    const iconPath = path.join(__dirname, 'icon.png');
+    // In packaged app, icon.png might be in resources or next to exe
+    let iconPath = path.join(__dirname, 'icon.png');
+    if (!fs.existsSync(iconPath) && process.resourcesPath) {
+      iconPath = path.join(process.resourcesPath, 'app', 'icon.png');
+    }
+
     let icon;
     if (fs.existsSync(iconPath)) {
       icon = nativeImage.createFromPath(iconPath);
@@ -96,7 +101,6 @@ function createTray() {
       icon = createTrayIcon();
     }
 
-    // Keep tray global reference
     tray = new Tray(icon);
     tray.setToolTip('LiteLLM Cons');
     updateTrayContextMenu();
@@ -119,6 +123,7 @@ function createTray() {
 }
 
 function updateTrayContextMenu() {
+  if (!tray) return;
   const contextMenu = Menu.buildFromTemplate([
     { 
       label: 'LiteLLM Cons (Exibir/Ocultar)', 
@@ -157,7 +162,12 @@ function createMainWindow() {
       }
     });
 
-    mainWindow.loadFile(path.join(__dirname, 'tray-panel.html'));
+    let htmlPath = path.join(__dirname, 'tray-panel.html');
+    if (!fs.existsSync(htmlPath) && process.resourcesPath) {
+      htmlPath = path.join(process.resourcesPath, 'app', 'tray-panel.html');
+    }
+
+    mainWindow.loadFile(htmlPath);
 
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
@@ -165,16 +175,12 @@ function createMainWindow() {
     const windowHeight = 520;
     mainWindow.setPosition(screenWidth - windowWidth - 20, screenHeight - windowHeight - 20);
 
-    // Prevent destruction on close
     mainWindow.on('close', (e) => {
       if (!app.isQuitting) {
         e.preventDefault();
         mainWindow.hide();
       }
     });
-
-    // NOTE: Removed blur event that automatically hid the window!
-    // Now the window stays open on screen until you click close or click the tray icon/taskbar.
 
     log('Main window created');
   } catch (e) {
@@ -226,7 +232,12 @@ function openSettingsWindow() {
       }
     });
 
-    settingsWindow.loadFile(path.join(__dirname, 'settings.html'));
+    let settingsHtml = path.join(__dirname, 'settings.html');
+    if (!fs.existsSync(settingsHtml) && process.resourcesPath) {
+      settingsHtml = path.join(process.resourcesPath, 'app', 'settings.html');
+    }
+
+    settingsWindow.loadFile(settingsHtml);
 
     settingsWindow.on('closed', () => {
       settingsWindow = null;
@@ -254,41 +265,53 @@ ipcMain.handle('fetch-usage', async () => {
     const host = appConfig.litellmHost || '192.168.1.130';
     const port = appConfig.litellmPort || 4000;
     
-    const req = http.get({
-      hostname: host,
-      port: port,
-      path: '/spend/logs',
-      headers: { 'Authorization': 'Bearer 1234' },
-      timeout: 5000
-    }, res => {
-      let d = '';
-      res.on('data', c => d += c);
-      res.on('end', () => {
-        try {
-          const logs = JSON.parse(d);
-          let today = new Date().toISOString().slice(0, 10);
-          const counts = {};
-          logs.forEach(l => {
-            if (l.startTime && !l.startTime.startsWith(today)) return;
-            const tokens = l.total_tokens || ((l.prompt_tokens || 0) + (l.completion_tokens || 0)) || 1;
-            const group = l.model_group;
-            const model = l.model || '';
-            if (group) counts[group] = (counts[group] || 0) + tokens;
-            if (model) {
-              counts[model] = (counts[model] || 0) + tokens;
-              const parts = model.split('/');
-              const last = parts[parts.length - 1].split(':')[0];
-              if (last) counts[last] = (counts[last] || 0) + tokens;
-            }
-          });
-          resolve({ success: true, usage: counts });
-        } catch (e) {
-          resolve({ success: false, error: e.message, usage: {} });
+    // Test direct IP connection, with fallback to localhost if 192.168.1.130 fails
+    const tryFetch = (targetHost, targetPort) => {
+      const req = http.get({
+        hostname: targetHost,
+        port: targetPort,
+        path: '/spend/logs',
+        headers: { 'Authorization': 'Bearer 1234' },
+        timeout: 3000
+      }, res => {
+        let d = '';
+        res.on('data', c => d += c);
+        res.on('end', () => {
+          try {
+            const logs = JSON.parse(d);
+            let today = new Date().toISOString().slice(0, 10);
+            const counts = {};
+            logs.forEach(l => {
+              if (l.startTime && !l.startTime.startsWith(today)) return;
+              const tokens = l.total_tokens || ((l.prompt_tokens || 0) + (l.completion_tokens || 0)) || 1;
+              const group = l.model_group;
+              const model = l.model || '';
+              if (group) counts[group] = (counts[group] || 0) + tokens;
+              if (model) {
+                counts[model] = (counts[model] || 0) + tokens;
+                const parts = model.split('/');
+                const last = parts[parts.length - 1].split(':')[0];
+                if (last) counts[last] = (counts[last] || 0) + tokens;
+              }
+            });
+            resolve({ success: true, usage: counts });
+          } catch (e) {
+            resolve({ success: false, error: e.message, usage: {} });
+          }
+        });
+      });
+      req.on('error', err => {
+        if (targetHost !== 'localhost' && targetHost !== '127.0.0.1') {
+          // Fallback to localhost if remote IP fails
+          tryFetch('127.0.0.1', targetPort);
+        } else {
+          resolve({ success: false, error: err.message, usage: {} });
         }
       });
-    });
-    req.on('error', err => resolve({ success: false, error: err.message, usage: {} }));
-    req.on('timeout', () => { req.destroy(); resolve({ success: false, error: 'Timeout', usage: {} }); });
+      req.on('timeout', () => { req.destroy(); resolve({ success: false, error: 'Timeout', usage: {} }); });
+    };
+
+    tryFetch(host, port);
   });
 });
 

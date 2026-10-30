@@ -22,7 +22,8 @@
       "tray-panel.html",
       "settings.html",
       "package.json"
-    ]
+    ],
+    "asar": false
   },
   "devDependencies": {
     "electron": "^24.22.1",
