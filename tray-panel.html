@@ -50,6 +50,9 @@
             <button onclick="openSettings()" title="Configurações" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors">
                 <i class="fa-solid fa-gear text-xs"></i>
             </button>
+            <button onclick="hideWindow()" title="Minimizar para Tray" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors">
+                <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
         </div>
     </div>
 
@@ -177,8 +180,12 @@
 
         function openSettings() {
             ipcRenderer.invoke('get-config').then(() => {
-                // Settings is opened by main process via tray menu or we can add a shortcut
+                // Settings triggered
             });
+        }
+
+        function hideWindow() {
+            window.close(); // Triggers the 'close' event in main process which hides it
         }
 
         ipcRenderer.on('config-updated', (event, newCfg) => {

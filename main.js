@@ -81,10 +81,7 @@ app.whenReady().then(() => {
 });
 
 function createTrayIcon() {
-  // Create a crisp 16x16 icon in memory so tray always renders even without icon.png
-  const size = 16;
-  const img = nativeImage.createEmpty();
-  // We can use a clean SVG converted to data URL or a visible data URL PNG
+  // Simple 16x16 icon data URL
   const iconDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAA9SURBVDhPY3gro/C/EgwM40pAnBoA2fB/4y34v+E2fCY3AGpAUqMDfS04eA2AKRpx6uInTxkG4pI4mU0UAD+OPl2P1yS9AAAAAElFTkSuQmCC';
   return nativeImage.createFromDataURL(iconDataUrl);
 }
@@ -99,8 +96,9 @@ function createTray() {
       icon = createTrayIcon();
     }
 
+    // Keep tray global reference
     tray = new Tray(icon);
-    tray.setToolTip('LiteLLM Cons (Clique para abrir)');
+    tray.setToolTip('LiteLLM Cons');
     updateTrayContextMenu();
 
     tray.on('click', (event, bounds) => {
@@ -147,11 +145,11 @@ function createMainWindow() {
     mainWindow = new BrowserWindow({
       width: 380,
       height: 520,
-      show: true, // Show on launch so the user sees the floating panel right away!
+      show: true,
       frame: false,
       transparent: true,
       alwaysOnTop: true,
-      skipTaskbar: false, // Keep in taskbar for easy access & visibility on Windows
+      skipTaskbar: false,
       resizable: false,
       webPreferences: {
         nodeIntegration: true,
@@ -161,7 +159,6 @@ function createMainWindow() {
 
     mainWindow.loadFile(path.join(__dirname, 'tray-panel.html'));
 
-    // Position window in bottom right corner near tray on startup
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
     const windowWidth = 380;
@@ -176,11 +173,8 @@ function createMainWindow() {
       }
     });
 
-    mainWindow.on('blur', () => {
-      if (mainWindow && mainWindow.isVisible() && (!settingsWindow || !settingsWindow.isVisible())) {
-        mainWindow.hide();
-      }
-    });
+    // NOTE: Removed blur event that automatically hid the window!
+    // Now the window stays open on screen until you click close or click the tray icon/taskbar.
 
     log('Main window created');
   } catch (e) {
