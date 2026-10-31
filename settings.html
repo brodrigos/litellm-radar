@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>LiteLLM Cons - Configurações RPD</title>
+    <title>LiteLLM Cons - Configurações RPD por Grupo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -13,14 +13,14 @@
                 <i class="fa-solid fa-sliders"></i>
             </div>
             <div>
-                <h1 class="text-xl font-extrabold tracking-tight text-white">Configuração de Limites RPD</h1>
-                <p class="text-xs text-slate-400">Defina o limite de requisições diárias (RPD) para cada modelo Free Tier.</p>
+                <h1 class="text-xl font-extrabold tracking-tight text-white">Limites RPD por Grupo</h1>
+                <p class="text-xs text-slate-400">Defina o limite diário de requisições (RPD) compartilhado por grupo de provedor.</p>
             </div>
         </div>
 
         <form id="settings-form" class="space-y-4">
             <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-4">
-                <h2 class="text-xs font-semibold uppercase tracking-wider text-indigo-400 mb-2">Requisições por Dia (RPD)</h2>
+                <h2 class="text-xs font-semibold uppercase tracking-wider text-indigo-400 mb-2">Requisições por Dia (RPD) por Grupo</h2>
                 
                 <div class="space-y-3" id="requests-inputs">
                     <!-- Dynamic inputs injected here -->
@@ -52,14 +52,12 @@
     <script>
         const { ipcRenderer } = require('electron');
 
-        const standardModels = [
-            'gemini-3.5-flash',
-            'gemini-3.6-flash',
+        const defaultGroups = [
             'gemini-3.5-flash-lite',
-            'gemini-fallback',
+            'gemini-3.6-flash',
+            'gemini-3.5-flash',
             'groq-fast',
             'or-super-vl',
-            'or-flint',
             'cloudflare-last'
         ];
 
@@ -72,13 +70,17 @@
             const container = document.getElementById('requests-inputs');
             container.innerHTML = '';
 
-            standardModels.forEach(m => {
-                const val = cfg.maxRequests?.[m] || cfg.maxRequests?.default || 1500;
+            const groupsMap = cfg.maxRequestsByGroup || {};
+            const keys = Array.from(new Set([...defaultGroups, ...Object.keys(groupsMap)]));
+
+            keys.forEach(g => {
+                if (g === 'default') return;
+                const val = groupsMap[g] || cfg.maxRequestsByGroup?.default || 1500;
                 const div = document.createElement('div');
                 div.className = 'flex items-center justify-between gap-3';
                 div.innerHTML = `
-                    <span class="text-xs font-medium text-slate-300 w-36 truncate" title="${m}">${m}</span>
-                    <input type="number" data-model="${m}" value="${val}" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500">
+                    <span class="text-xs font-medium text-slate-300 w-36 truncate" title="${g}">${g}</span>
+                    <input type="number" data-group="${g}" value="${val}" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500">
                 `;
                 container.appendChild(div);
             });
@@ -91,11 +93,11 @@
             cfg.litellmHost = document.getElementById('host-input').value;
             cfg.litellmPort = Number(document.getElementById('port-input').value);
 
-            if (!cfg.maxRequests) cfg.maxRequests = {};
+            if (!cfg.maxRequestsByGroup) cfg.maxRequestsByGroup = {};
             
             document.querySelectorAll('#requests-inputs input').forEach(input => {
-                const model = input.getAttribute('data-model');
-                cfg.maxRequests[model] = Number(input.value) || 1500;
+                const group = input.getAttribute('data-group');
+                cfg.maxRequestsByGroup[group] = Number(input.value) || 1500;
             });
 
             await ipcRenderer.invoke('save-config', cfg);

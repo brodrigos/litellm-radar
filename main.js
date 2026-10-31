@@ -41,17 +41,12 @@ function loadConfig() {
     }
   } catch (e) { log('loadConfig error: ' + e.message); }
   return {
-    maxRequests: {
-      default: 1500, // Default Free Tier RPD (Requests Per Day) limit (e.g. Google Gemini 1500 RPD)
+    maxRequestsByGroup: {
+      default: 1500,
+      'gemini-3.5-flash-lite': 1500,  // Google shared RPD across all gemini models
       'groq-fast': 14400,
-      'gemini-fallback': 1500,
-      'gemini-3.5-flash': 1500,
-      'gemini-3.6-flash': 1500,
-      'gemini-3.5-flash-lite': 1500,
       'or-super-vl': 200,
       'or-flint': 200,
-      'or-lightning': 200,
-      'or-north': 200,
       'cloudflare-last': 1000
     },
     litellmHost: '192.168.1.130',
@@ -223,8 +218,8 @@ function openSettingsWindow() {
 
   try {
     settingsWindow = new BrowserWindow({
-      width: 480,
-      height: 580,
+      width: 500,
+      height: 600,
       title: 'LiteLLM Cons - Configurações de Limites RPD',
       autoHideMenuBar: true,
       webPreferences: {
@@ -265,7 +260,7 @@ ipcMain.handle('save-config', (event, newCfg) => {
   return true;
 });
 
-// Cache request counts per model today
+// Cache request counts per group today
 let cachedRequests = {};
 
 ipcMain.handle('fetch-usage', async () => {
@@ -290,18 +285,9 @@ ipcMain.handle('fetch-usage', async () => {
           if (Array.isArray(logs)) {
             logs.forEach(l => {
               if (l.startTime && !l.startTime.startsWith(today)) return;
-              const group = l.model_group;
-              const model = l.model || '';
+              const group = l.model_group; // <-- This is the provider group (shared RPD!)
               if (group) {
                 reqCounts[group] = (reqCounts[group] || 0) + 1;
-              }
-              if (model) {
-                reqCounts[model] = (reqCounts[model] || 0) + 1;
-                const parts = model.split('/');
-                const last = parts[parts.length - 1].split(':')[0];
-                if (last) {
-                  reqCounts[last] = (reqCounts[last] || 0) + 1;
-                }
               }
             });
           }
