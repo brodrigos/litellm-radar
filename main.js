@@ -41,15 +41,18 @@ function loadConfig() {
     }
   } catch (e) { log('loadConfig error: ' + e.message); }
   return {
-    maxTokens: {
-      default: 100000,
-      'groq-fast': 131072,
-      'gemini-fallback': 1000000,
-      'or-super-vl': 1000000,
-      'or-flint': 100000,
-      'or-lightning': 100000,
-      'or-north': 100000,
-      'cloudflare-last': 128000
+    maxRequests: {
+      default: 1500, // Default Free Tier RPD (Requests Per Day) limit (e.g. Google Gemini 1500 RPD)
+      'groq-fast': 14400,
+      'gemini-fallback': 1500,
+      'gemini-3.5-flash': 1500,
+      'gemini-3.6-flash': 1500,
+      'gemini-3.5-flash-lite': 1500,
+      'or-super-vl': 200,
+      'or-flint': 200,
+      'or-lightning': 200,
+      'or-north': 200,
+      'cloudflare-last': 1000
     },
     litellmHost: '192.168.1.130',
     litellmPort: 4000
@@ -128,7 +131,7 @@ function updateTrayContextMenu() {
       click: () => toggleMainWindow() 
     },
     { 
-      label: 'Configurações (Max Tokens)', 
+      label: 'Configurações (Limites RPD)', 
       click: () => openSettingsWindow() 
     },
     { type: 'separator' },
@@ -146,8 +149,8 @@ function updateTrayContextMenu() {
 function createMainWindow() {
   try {
     mainWindow = new BrowserWindow({
-      width: 380,
-      height: 520,
+      width: 390,
+      height: 560,
       show: true,
       frame: false,
       transparent: true,
@@ -169,8 +172,8 @@ function createMainWindow() {
 
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-    const windowWidth = 380;
-    const windowHeight = 520;
+    const windowWidth = 390;
+    const windowHeight = 560;
     mainWindow.setPosition(screenWidth - windowWidth - 20, screenHeight - windowHeight - 20);
 
     mainWindow.on('close', (e) => {
@@ -194,8 +197,8 @@ function toggleMainWindow(bounds) {
   } else {
     if (bounds && bounds.x && bounds.y) {
       const { x, y } = bounds;
-      const windowWidth = 380;
-      const windowHeight = 520;
+      const windowWidth = 390;
+      const windowHeight = 560;
       let posX = x - windowWidth / 2;
       let posY = y - windowHeight - 10;
       if (posY < 0) posY = y + 30;
@@ -203,8 +206,8 @@ function toggleMainWindow(bounds) {
     } else {
       const primaryDisplay = screen.getPrimaryDisplay();
       const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-      const windowWidth = 380;
-      const windowHeight = 520;
+      const windowWidth = 390;
+      const windowHeight = 560;
       mainWindow.setPosition(screenWidth - windowWidth - 20, screenHeight - windowHeight - 20);
     }
     mainWindow.show();
@@ -221,8 +224,8 @@ function openSettingsWindow() {
   try {
     settingsWindow = new BrowserWindow({
       width: 480,
-      height: 540,
-      title: 'LiteLLM Cons - Configurações',
+      height: 580,
+      title: 'LiteLLM Cons - Configurações de Limites RPD',
       autoHideMenuBar: true,
       webPreferences: {
         nodeIntegration: true,
@@ -262,9 +265,8 @@ ipcMain.handle('save-config', (event, newCfg) => {
   return true;
 });
 
-// Cache usage in memory to avoid large payload delay re-fetching every 30s
-let cachedUsage = {};
-let lastFetchTimestamp = 0;
+// Cache request counts per model today
+let cachedRequests = {};
 
 ipcMain.handle('fetch-usage', async () => {
   return new Promise((resolve) => {
@@ -276,7 +278,7 @@ ipcMain.handle('fetch-usage', async () => {
       port: port,
       path: '/spend/logs',
       headers: { 'Authorization': 'Bearer 1234' },
-      timeout: 15000 // Increased timeout to 15s for large logs response
+      timeout: 15000
     }, res => {
       let d = '';
       res.on('data', c => d += c);
@@ -284,36 +286,39 @@ ipcMain.handle('fetch-usage', async () => {
         try {
           const logs = JSON.parse(d);
           let today = new Date().toISOString().slice(0, 10);
-          const counts = {};
+          const reqCounts = {};
           if (Array.isArray(logs)) {
             logs.forEach(l => {
               if (l.startTime && !l.startTime.startsWith(today)) return;
-              const tokens = l.total_tokens || ((l.prompt_tokens || 0) + (l.completion_tokens || 0)) || 1;
               const group = l.model_group;
               const model = l.model || '';
-              if (group) counts[group] = (counts[group] || 0) + tokens;
+              if (group) {
+                reqCounts[group] = (reqCounts[group] || 0) + 1;
+              }
               if (model) {
-                counts[model] = (counts[model] || 0) + tokens;
+                reqCounts[model] = (reqCounts[model] || 0) + 1;
                 const parts = model.split('/');
                 const last = parts[parts.length - 1].split(':')[0];
-                if (last) counts[last] = (counts[last] || 0) + tokens;
+                if (last) {
+                  reqCounts[last] = (reqCounts[last] || 0) + 1;
+                }
               }
             });
           }
-          cachedUsage = counts;
-          resolve({ success: true, usage: counts });
+          cachedRequests = reqCounts;
+          resolve({ success: true, usage: reqCounts });
         } catch (e) {
-          resolve({ success: true, usage: cachedUsage }); // fallback to cache on parse error
+          resolve({ success: true, usage: cachedRequests });
         }
       });
     });
     req.on('error', err => {
       log('fetch-usage error: ' + err.message);
-      resolve({ success: true, usage: cachedUsage }); // fallback to cache on network error
+      resolve({ success: true, usage: cachedRequests });
     });
     req.on('timeout', () => { 
       req.destroy(); 
-      resolve({ success: true, usage: cachedUsage }); 
+      resolve({ success: true, usage: cachedRequests }); 
     });
   });
 });
