@@ -157,6 +157,16 @@
             const allGroupsSet = new Set(groupsFromApi.length > 0 ? groupsFromApi : usageGroups);
             const allGroups = Array.from(allGroupsSet);
 
+            // Ordenar do maior consumo (requisições hoje) para o menor
+            allGroups.sort((a, b) => {
+                const usageA = usageMap[a] || 0;
+                const usageB = usageMap[b] || 0;
+                if (usageB !== usageA) {
+                    return usageB - usageA; // Maior consumo primeiro
+                }
+                return a.localeCompare(b); // Ordem alfabética como desempate
+            });
+
             if (allGroups.length === 0) {
                 container.innerHTML = `
                     <div class="text-center py-16 text-slate-500">
