@@ -1,9 +1,0 @@
-{
-  "id": "filament-control",
-  "name": "Filament3D",
-  "description": "Controle de consumo de filamento para impressora 3D (Klipper / Moonraker 192.168.1.101:85). Gerencia bobinas, calcula custo em USD e sincroniza consumo com a impressora.",
-  "version": "1.0.0",
-  "icon": "fa-solid fa-cube",
-  "tags": ["3d", "klipper", "filamento", "moonraker", "usd"],
-  "entry": "index.html"
-}
