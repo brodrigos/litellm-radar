@@ -1,0 +1,24 @@
+{
+  "spools": [
+    {
+      "id": "1",
+      "name": "PLA White Generic",
+      "material": "PLA",
+      "color": "#FFFFFF",
+      "initialWeightGrams": 1000,
+      "emptySpoolWeightGrams": 200,
+      "currentWeightGrams": 1000,
+      "densityGcm3": 1.24,
+      "diameterMm": 1.75,
+      "cost": 19.99,
+      "notes": "Main prototype spool",
+      "createdAt": "2026-11-01T00:00:00.000Z"
+    }
+  ],
+  "activeSpoolId": "1",
+  "history": [],
+  "settings": {
+    "printerUrl": "http://192.168.1.101:85",
+    "lowFilamentThresholdGrams": 100
+  }
+}
