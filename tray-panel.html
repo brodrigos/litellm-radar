@@ -7,16 +7,12 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body {
-            background: rgba(15, 23, 42, 0.95);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border-radius: 20px;
-            border: 1px solid rgba(51, 65, 85, 0.6);
+            background: #0f172a;
             overflow: hidden;
             user-select: none;
         }
         ::-webkit-scrollbar {
-            width: 5px;
+            width: 6px;
         }
         ::-webkit-scrollbar-track {
             background: transparent;
@@ -30,46 +26,43 @@
         }
     </style>
 </head>
-<body class="text-slate-100 h-screen flex flex-col font-sans">
-    <!-- Header / Drag region -->
-    <div class="px-4 py-3 bg-slate-900/80 border-b border-slate-800 flex justify-between items-center" style="-webkit-app-region: drag;">
-        <div class="flex items-center gap-2.5">
-            <div class="w-8 h-8 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-                <i class="fa-solid fa-gauge-high text-sm"></i>
+<body class="text-slate-100 h-screen flex flex-col font-sans antialiased">
+    <!-- Header -->
+    <div class="px-5 py-4 bg-slate-900 border-b border-slate-800 flex justify-between items-center shadow-md">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                <i class="fa-solid fa-gauge-high text-base"></i>
             </div>
             <div>
-                <h1 class="text-sm font-bold tracking-tight text-white leading-none">LiteLLM Cons</h1>
-                <span class="text-[10px] text-slate-400 font-medium">Quota Free Tier por Grupo (RPD)</span>
+                <h1 class="text-base font-bold tracking-tight text-white leading-none">LiteLLM Cons</h1>
+                <span class="text-[11px] text-slate-400 font-medium">Quota Free Tier por Grupo (RPD Hoje)</span>
             </div>
         </div>
-        <div class="flex items-center gap-1.5" style="-webkit-app-region: no-drag;">
-            <button onclick="refreshData()" title="Atualizar" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors">
+        <div class="flex items-center gap-2">
+            <button onclick="refreshData()" title="Atualizar dados" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors">
                 <i class="fa-solid fa-rotate text-xs" id="refresh-icon"></i>
             </button>
-            <button onclick="openSettings()" title="Configurações" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors">
+            <button onclick="openSettings()" title="Configurações" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors">
                 <i class="fa-solid fa-gear text-xs"></i>
-            </button>
-            <button onclick="hideWindow()" title="Ocultar" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors">
-                <i class="fa-solid fa-xmark text-xs"></i>
             </button>
         </div>
     </div>
 
     <!-- Models List Container -->
     <div id="models-list" class="flex-1 overflow-y-auto p-4 space-y-3">
-        <div class="text-center py-12 text-slate-500">
-            <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
-            <p class="text-xs">Carregando cotas RPD por grupo...</p>
+        <div class="text-center py-16 text-slate-500">
+            <i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-indigo-400"></i>
+            <p class="text-sm">Carregando cotas RPD por grupo...</p>
         </div>
     </div>
 
     <!-- Footer Status -->
-    <div class="px-4 py-2.5 bg-slate-900/90 border-t border-slate-800 text-[11px] text-slate-400 flex justify-between items-center">
-        <div class="flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" id="status-dot"></span>
-            <span id="status-text">Gateway Conectado</span>
+    <div class="px-5 py-3 bg-slate-900 border-t border-slate-800 text-[11px] text-slate-400 flex justify-between items-center">
+        <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" id="status-dot"></span>
+            <span id="status-text" class="font-medium">Conectando...</span>
         </div>
-        <span id="last-update" class="text-slate-500">-</span>
+        <span id="last-update" class="text-slate-500 font-mono">-</span>
     </div>
 
     <script>
@@ -81,9 +74,25 @@
                 'gemini-3.5-flash-lite': 1500,
                 'groq-fast': 14400,
                 'or-super-vl': 200,
-                'cloudflare-last': 1000
+                'or-flint': 200
             }
         };
+
+        let modelGroupsFromApi = [];
+
+        async function fetchModelsFromApi() {
+            try {
+                const res = await ipcRenderer.invoke('fetch-models');
+                if (res && res.success && Array.isArray(res.models)) {
+                    modelGroupsFromApi = res.models;
+                    console.log('Models from API:', modelGroupsFromApi);
+                    return res.models;
+                }
+            } catch (e) {
+                console.error('fetch-models error:', e);
+            }
+            return [];
+        }
 
         async function init() {
             try {
@@ -91,7 +100,13 @@
                 if (cfg && cfg.maxRequestsByGroup) {
                     config = cfg;
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.error('get-config error:', e);
+            }
+
+            // Buscar lista real de modelos do LiteLLM
+            await fetchModelsFromApi();
+
             refreshData();
             setInterval(refreshData, 30000);
         }
@@ -100,65 +115,98 @@
             const icon = document.getElementById('refresh-icon');
             if (icon) icon.classList.add('fa-spin');
 
-            const res = await ipcRenderer.invoke('fetch-usage');
-            
-            if (icon) {
-                setTimeout(() => icon.classList.remove('fa-spin'), 500);
+            try {
+                const res = await ipcRenderer.invoke('fetch-usage');
+                
+                const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                document.getElementById('last-update').innerText = 'Atualizado ' + now;
+
+                const statusDot = document.getElementById('status-dot');
+                const statusText = document.getElementById('status-text');
+
+                if (res && res.success) {
+                    statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
+                    statusText.innerText = 'Gateway Conectado (' + (res.totalLogsToday || 0) + ' reqs hoje)';
+                    renderGroups(res.usage || {});
+                } else {
+                    statusDot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
+                    statusText.innerText = 'Erro: ' + (res?.error || 'Não conectado');
+                    renderGroups(res?.usage || {});
+                }
+            } catch (err) {
+                console.error('refreshData error:', err);
+                document.getElementById('status-dot').className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
+                document.getElementById('status-text').innerText = 'Erro na comunicação interna';
+                renderGroups({});
+            } finally {
+                if (icon) {
+                    setTimeout(() => icon.classList.remove('fa-spin'), 500);
+                }
             }
-
-            const now = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            document.getElementById('last-update').innerText = now;
-
-            const usageMap = res.success ? res.usage : {};
-            renderGroups(usageMap);
         }
 
         function renderGroups(usageMap) {
             const container = document.getElementById('models-list');
             container.innerHTML = '';
 
-            const groups = Object.keys(usageMap);
-            if (groups.length === 0) {
+            // Fonte de verdade absoluta: SOMENTE modelos retornados pela API do LiteLLM (/models)
+            // Se a API falhou em carregar, usa usageGroups como fallback
+            const groupsFromApi = modelGroupsFromApi || [];
+            const usageGroups = Object.keys(usageMap);
+            
+            const allGroupsSet = new Set(groupsFromApi.length > 0 ? groupsFromApi : usageGroups);
+            const allGroups = Array.from(allGroupsSet);
+
+            if (allGroups.length === 0) {
                 container.innerHTML = `
-                    <div class="text-center py-12 text-slate-500">
-                        <i class="fa-solid fa-info-circle text-2xl mb-2"></i>
-                        <p class="text-xs">Nenhuma requisição registrada hoje.</p>
+                    <div class="text-center py-16 text-slate-500">
+                        <i class="fa-solid fa-circle-info text-3xl mb-3"></i>
+                        <p class="text-sm">Nenhum grupo de modelo configurado.</p>
                     </div>
                 `;
                 return;
             }
 
-            groups.forEach(groupName => {
+            allGroups.forEach(groupName => {
                 const usedReqs = usageMap[groupName] || 0;
                 const maxReqs = (config.maxRequestsByGroup && config.maxRequestsByGroup[groupName]) || config.maxRequestsByGroup?.default || 1500;
                 
-                const percent = Math.min(100, Math.max(1, Math.round((usedReqs / maxReqs) * 100)));
+                const percent = Math.min(100, Math.round((usedReqs / maxReqs) * 100));
                 const remaining = Math.max(0, maxReqs - usedReqs);
 
                 let barColor = 'from-indigo-500 to-blue-500';
-                if (percent >= 90) barColor = 'from-rose-500 to-red-600';
-                else if (percent >= 70) barColor = 'from-amber-500 to-yellow-500';
+                let statusBadge = 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+
+                if (percent >= 90) {
+                    barColor = 'from-rose-500 to-red-600';
+                    statusBadge = 'bg-rose-500/20 text-rose-400 border-rose-500/30';
+                } else if (percent >= 70) {
+                    barColor = 'from-amber-500 to-yellow-500';
+                    statusBadge = 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+                }
 
                 const card = document.createElement('div');
-                card.className = 'bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 shadow-sm hover:border-slate-700 transition-all';
+                card.className = 'bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-sm hover:border-slate-700 transition-all';
                 
                 card.innerHTML = `
-                    <div class="flex justify-between items-center mb-1.5">
-                        <span class="text-xs font-bold text-white flex items-center gap-1.5 truncate max-w-[180px]" title="${groupName}">
-                            <span class="w-2 h-2 rounded-full ${percent >= 90 ? 'bg-rose-500 animate-ping' : 'bg-emerald-400'}"></span>
-                            ${groupName}
-                        </span>
-                        <div class="text-[11px] font-mono text-slate-300">
-                            <span class="font-bold text-indigo-400">${usedReqs} reqs</span>
-                            <span class="text-slate-500">/ ${maxReqs} (Restam: <strong class="text-emerald-400">${remaining}</strong>)</span>
+                    <div class="flex justify-between items-center mb-2">
+                        <div class="flex items-center gap-2 max-w-[220px] truncate" title="${groupName}">
+                            <span class="w-2.5 h-2.5 rounded-full ${percent >= 90 ? 'bg-rose-500 animate-ping' : (usedReqs > 0 ? 'bg-emerald-400' : 'bg-slate-600')}"></span>
+                            <span class="text-xs font-bold text-white truncate">${groupName}</span>
+                        </div>
+                        <div class="text-xs font-mono">
+                            <span class="font-bold text-indigo-400">${usedReqs}</span>
+                            <span class="text-slate-500">/ ${maxReqs} RPD</span>
                         </div>
                     </div>
-                    <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800/50">
-                        <div class="bg-gradient-to-r ${barColor} h-full rounded-full transition-all duration-500" style="width: ${percent}%"></div>
+
+                    <div class="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800 my-2">
+                        <div class="bg-gradient-to-r ${barColor} h-full rounded-full transition-all duration-500" style="width: ${Math.max(1, percent)}%"></div>
                     </div>
-                    <div class="flex justify-between items-center mt-1 text-[10px] text-slate-500">
-                        <span>Cota RPD por Grupo</span>
-                        <span>${percent}%</span>
+
+                    <div class="flex justify-between items-center text-[11px] text-slate-400">
+                        <span>Restam: <strong class="${remaining === 0 ? 'text-rose-400' : 'text-emerald-400'} font-mono">${remaining} reqs</strong></span>
+                        <span class="font-semibold">${percent}% usado</span>
                     </div>
                 `;
                 container.appendChild(card);
@@ -167,10 +215,6 @@
 
         function openSettings() {
             ipcRenderer.invoke('open-settings-window');
-        }
-
-        function hideWindow() {
-            window.close();
         }
 
         ipcRenderer.on('config-updated', (event, newCfg) => {

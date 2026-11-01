@@ -1,14 +1,9 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu } = require('electron');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
 
-let logFile = 'litellm-cons-error.log';
-try {
-  if (app && typeof app.getPath === 'function') {
-    logFile = path.join(app.getPath('userData'), 'litellm-cons-error.log');
-  }
-} catch(e) {}
+let logFile = path.join(app.getPath('userData'), 'litellm-cons-error.log');
 
 function log(msg) {
   try {
@@ -20,42 +15,34 @@ process.on('uncaughtException', (err) => {
   log('Uncaught Exception: ' + (err.stack || err.message));
 });
 
-let tray = null;
 let mainWindow = null;
 let settingsWindow = null;
 
-function getConfigPath() {
-  try {
-    if (app && typeof app.getPath === 'function') {
-      return path.join(app.getPath('userData'), 'litellm-cons-config.json');
-    }
-  } catch(e) {}
-  return path.join(process.cwd(), 'litellm-cons-config.json');
-}
+const defaultConfig = {
+  maxRequestsByGroup: {
+    default: 1500,
+    'gemini-3.5-flash-lite': 1500,
+    'groq-fast': 14400,
+    'or-super-vl': 200,
+    'or-flint': 200
+  },
+  litellmHost: '192.168.1.130',
+  litellmPort: 4000,
+  litellmApiKey: '1234'
+};
 
 function loadConfig() {
-  const cfgPath = getConfigPath();
+  const cfgPath = path.join(app.getPath('userData'), 'litellm-cons-config.json');
   try {
     if (fs.existsSync(cfgPath)) {
-      return JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+      return { ...defaultConfig, ...JSON.parse(fs.readFileSync(cfgPath, 'utf8')) };
     }
   } catch (e) { log('loadConfig error: ' + e.message); }
-  return {
-    maxRequestsByGroup: {
-      default: 1500,
-      'gemini-3.5-flash-lite': 1500,  // Google shared RPD across all gemini models
-      'groq-fast': 14400,
-      'or-super-vl': 200,
-      'or-flint': 200,
-      'cloudflare-last': 1000
-    },
-    litellmHost: '192.168.1.130',
-    litellmPort: 4000
-  };
+  return defaultConfig;
 }
 
 function saveConfig(cfg) {
-  const cfgPath = getConfigPath();
+  const cfgPath = path.join(app.getPath('userData'), 'litellm-cons-config.json');
   try {
     fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2), 'utf8');
   } catch (e) { log('saveConfig error: ' + e.message); }
@@ -63,95 +50,42 @@ function saveConfig(cfg) {
 
 let appConfig = loadConfig();
 
-const gotTheLock = app.requestSingleInstanceLock();
-if (!gotTheLock) {
-  app.quit();
-}
-
 app.whenReady().then(() => {
   log('App ready');
-  if (app.dock) app.dock.hide();
 
-  createTray();
+  // Criar menu do app
+  const template = [
+    {
+      label: 'Arquivo',
+      submenu: [
+        {
+          label: 'Configurações',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => openSettingsWindow()
+        },
+        { type: 'separator' },
+        {
+          label: 'Sair',
+          role: 'quit'
+        }
+      ]
+    }
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+
   createMainWindow();
 }).catch(err => {
   log('App whenReady error: ' + err.message);
 });
 
-function createTrayIcon() {
-  const iconDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAA9SURBVDhPY3gro/C/EgwM40pAnBoA2fB/4y34v+E2fCY3AGpAUqMDfS04eA2AKRpx6uInTxkG4pI4mU0UAD+OPl2P1yS9AAAAAElFTkSuQmCC';
-  return nativeImage.createFromDataURL(iconDataUrl);
-}
-
-function createTray() {
-  try {
-    let iconPath = path.join(__dirname, 'icon.png');
-    if (!fs.existsSync(iconPath) && process.resourcesPath) {
-      iconPath = path.join(process.resourcesPath, 'app', 'icon.png');
-    }
-
-    let icon;
-    if (fs.existsSync(iconPath)) {
-      icon = nativeImage.createFromPath(iconPath);
-    } else {
-      icon = createTrayIcon();
-    }
-
-    tray = new Tray(icon);
-    tray.setToolTip('LiteLLM Cons');
-    updateTrayContextMenu();
-
-    tray.on('click', (event, bounds) => {
-      toggleMainWindow(bounds);
-    });
-    
-    tray.on('double-click', (event, bounds) => {
-      toggleMainWindow(bounds);
-    });
-
-    tray.on('right-click', () => {
-      tray.popUpContextMenu();
-    });
-    log('Tray created successfully');
-  } catch (e) {
-    log('createTray error: ' + e.message);
-  }
-}
-
-function updateTrayContextMenu() {
-  if (!tray) return;
-  const contextMenu = Menu.buildFromTemplate([
-    { 
-      label: 'LiteLLM Cons (Exibir/Ocultar)', 
-      click: () => toggleMainWindow() 
-    },
-    { 
-      label: 'Configurações (Limites RPD)', 
-      click: () => openSettingsWindow() 
-    },
-    { type: 'separator' },
-    { 
-      label: 'Sair', 
-      click: () => { 
-        app.isQuitting = true; 
-        app.quit(); 
-      } 
-    }
-  ]);
-  tray.setContextMenu(contextMenu);
-}
-
 function createMainWindow() {
   try {
     mainWindow = new BrowserWindow({
-      width: 390,
-      height: 560,
+      width: 500,
+      height: 680,
       show: true,
-      frame: false,
-      transparent: true,
-      alwaysOnTop: true,
-      skipTaskbar: false,
-      resizable: false,
+      title: 'LiteLLM Cons - Monitor de Quota RPD',
+      icon: path.join(__dirname, 'icon.png'),
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: false
@@ -165,48 +99,14 @@ function createMainWindow() {
 
     mainWindow.loadFile(htmlPath);
 
-    const primaryDisplay = screen.getPrimaryDisplay();
-    const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-    const windowWidth = 390;
-    const windowHeight = 560;
-    mainWindow.setPosition(screenWidth - windowWidth - 20, screenHeight - windowHeight - 20);
-
-    mainWindow.on('close', (e) => {
-      if (!app.isQuitting) {
-        e.preventDefault();
-        mainWindow.hide();
-      }
+    mainWindow.on('closed', () => {
+      mainWindow = null;
+      app.quit();
     });
 
     log('Main window created');
   } catch (e) {
     log('createMainWindow error: ' + e.message);
-  }
-}
-
-function toggleMainWindow(bounds) {
-  if (!mainWindow) return;
-
-  if (mainWindow.isVisible()) {
-    mainWindow.hide();
-  } else {
-    if (bounds && bounds.x && bounds.y) {
-      const { x, y } = bounds;
-      const windowWidth = 390;
-      const windowHeight = 560;
-      let posX = x - windowWidth / 2;
-      let posY = y - windowHeight - 10;
-      if (posY < 0) posY = y + 30;
-      mainWindow.setPosition(Math.round(posX), Math.round(posY));
-    } else {
-      const primaryDisplay = screen.getPrimaryDisplay();
-      const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-      const windowWidth = 390;
-      const windowHeight = 560;
-      mainWindow.setPosition(screenWidth - windowWidth - 20, screenHeight - windowHeight - 20);
-    }
-    mainWindow.show();
-    mainWindow.focus();
   }
 }
 
@@ -218,9 +118,10 @@ function openSettingsWindow() {
 
   try {
     settingsWindow = new BrowserWindow({
-      width: 500,
-      height: 600,
+      width: 520,
+      height: 650,
       title: 'LiteLLM Cons - Configurações de Limites RPD',
+      icon: path.join(__dirname, 'icon.png'),
       autoHideMenuBar: true,
       webPreferences: {
         nodeIntegration: true,
@@ -238,6 +139,8 @@ function openSettingsWindow() {
     settingsWindow.on('closed', () => {
       settingsWindow = null;
     });
+
+    log('Settings window created');
   } catch (e) {
     log('openSettingsWindow error: ' + e.message);
   }
@@ -254,61 +157,132 @@ ipcMain.handle('open-settings-window', () => {
 ipcMain.handle('save-config', (event, newCfg) => {
   appConfig = newCfg;
   saveConfig(appConfig);
-  if (mainWindow) {
+  if (mainWindow && mainWindow.webContents) {
     mainWindow.webContents.send('config-updated', appConfig);
   }
   return true;
 });
 
-// Cache request counts per group today
 let cachedRequests = {};
+
+ipcMain.handle('fetch-models', async () => {
+  return new Promise((resolve) => {
+    const host = appConfig.litellmHost || '192.168.1.130';
+    const port = appConfig.litellmPort || 4000;
+    const apiKey = appConfig.litellmApiKey || '1234';
+
+    const req = http.get({
+      hostname: host,
+      port: port,
+      path: '/models',
+      headers: { 'Authorization': 'Bearer ' + apiKey },
+      timeout: 10000
+    }, res => {
+      let d = '';
+      res.on('data', c => d += c);
+      res.on('end', () => {
+        try {
+          const result = JSON.parse(d);
+          let models = [];
+          if (Array.isArray(result)) {
+            models = result;
+          } else if (result && Array.isArray(result.data)) {
+            models = result.data;
+          } else if (result && typeof result === 'object') {
+            models = Object.keys(result);
+          }
+          const modelIds = models.map(m => (typeof m === 'string' ? m : (m.id || m.model_name || m.model))).filter(Boolean);
+          resolve({ success: true, models: modelIds });
+        } catch (e) {
+          log('fetch-models error: ' + e.message);
+          resolve({ success: false, error: e.message, models: [] });
+        }
+      });
+    });
+    req.on('error', err => {
+      log('fetch-models network error: ' + err.message);
+      resolve({ success: false, error: err.message, models: [] });
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ success: false, error: 'Timeout de conexão (10s)', models: [] });
+    });
+  });
+});
 
 ipcMain.handle('fetch-usage', async () => {
   return new Promise((resolve) => {
     const host = appConfig.litellmHost || '192.168.1.130';
     const port = appConfig.litellmPort || 4000;
-    
+    const apiKey = appConfig.litellmApiKey || '1234';
+
     const req = http.get({
       hostname: host,
       port: port,
       path: '/spend/logs',
-      headers: { 'Authorization': 'Bearer 1234' },
-      timeout: 15000
+      headers: { 'Authorization': 'Bearer ' + apiKey },
+      timeout: 60000
     }, res => {
       let d = '';
       res.on('data', c => d += c);
       res.on('end', () => {
         try {
           const logs = JSON.parse(d);
-          let today = new Date().toISOString().slice(0, 10);
+          const now = new Date();
+          
+          // Janela do dia local (00:00:00 até 23:59:59 em horário local)
+          const startOfLocalDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+          const endOfLocalDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+
           const reqCounts = {};
+          let countToday = 0;
+
           if (Array.isArray(logs)) {
             logs.forEach(l => {
-              if (l.startTime && !l.startTime.startsWith(today)) return;
-              const group = l.model_group; // <-- This is the provider group (shared RPD!)
-              if (group) {
-                reqCounts[group] = (reqCounts[group] || 0) + 1;
+              if (!l.startTime) return;
+
+              // Normaliza a string de data removendo microssegundos se houver (ex: .338000Z -> .338Z ou Z)
+              let timeStr = l.startTime;
+              if (timeStr.includes('.')) {
+                timeStr = timeStr.replace(/\\.\\d+Z$/, 'Z');
+              }
+
+              const logTime = new Date(timeStr);
+              if (isNaN(logTime.getTime())) return;
+
+              // Verifica se a requisição ocorreu hoje no horário local
+              if (logTime >= startOfLocalDay && logTime < endOfLocalDay) {
+                const group = l.model_group || l.model;
+                if (group) {
+                  reqCounts[group] = (reqCounts[group] || 0) + 1;
+                  countToday++;
+                }
               }
             });
           }
           cachedRequests = reqCounts;
-          resolve({ success: true, usage: reqCounts });
+          log('Fetched usage: success. ' + countToday + ' requests today across ' + Object.keys(reqCounts).length + ' active groups.');
+          resolve({ success: true, usage: reqCounts, totalLogsToday: countToday });
         } catch (e) {
-          resolve({ success: true, usage: cachedRequests });
+          log('fetch-usage parse error: ' + e.message);
+          resolve({ success: false, error: 'Erro ao analisar resposta do LiteLLM', usage: cachedRequests });
         }
       });
     });
+
     req.on('error', err => {
-      log('fetch-usage error: ' + err.message);
-      resolve({ success: true, usage: cachedRequests });
+      log('fetch-usage network error: ' + err.message);
+      resolve({ success: false, error: err.message, usage: cachedRequests });
     });
-    req.on('timeout', () => { 
-      req.destroy(); 
-      resolve({ success: true, usage: cachedRequests }); 
+
+    req.on('timeout', () => {
+      req.destroy();
+      log('fetch-usage timeout (60s)');
+      resolve({ success: false, error: 'Timeout de conexão (60s)', usage: cachedRequests });
     });
   });
 });
 
-app.on('window-all-closed', (e) => {
-  e.preventDefault();
+app.on('window-all-closed', () => {
+  app.quit();
 });

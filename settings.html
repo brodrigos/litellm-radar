@@ -6,44 +6,50 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans p-6">
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans p-6 antialiased">
     <div class="max-w-md mx-auto">
         <div class="flex items-center gap-3 mb-6">
-            <div class="p-3 bg-indigo-600/20 border border-indigo-500/30 rounded-xl text-indigo-400 text-xl">
+            <div class="p-3 bg-indigo-600/20 border border-indigo-500/30 rounded-2xl text-indigo-400 text-xl">
                 <i class="fa-solid fa-sliders"></i>
             </div>
             <div>
-                <h1 class="text-xl font-extrabold tracking-tight text-white">Limites RPD por Grupo</h1>
-                <p class="text-xs text-slate-400">Defina o limite diário de requisições (RPD) compartilhado por grupo de provedor.</p>
+                <h1 class="text-lg font-extrabold tracking-tight text-white">Configurações de Limites RPD</h1>
+                <p class="text-xs text-slate-400">Defina o limite diário de requisições (RPD) por grupo e credenciais do Gateway.</p>
             </div>
         </div>
 
         <form id="settings-form" class="space-y-4">
-            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-4">
-                <h2 class="text-xs font-semibold uppercase tracking-wider text-indigo-400 mb-2">Requisições por Dia (RPD) por Grupo</h2>
-                
-                <div class="space-y-3" id="requests-inputs">
+            <!-- Limites RPD por Grupo -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 space-y-3">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-indigo-400">Limites RPD por Grupo de Provedor</h2>
+                <div class="space-y-2.5 max-h-60 overflow-y-auto pr-1" id="requests-inputs">
                     <!-- Dynamic inputs injected here -->
                 </div>
             </div>
 
-            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-3">
-                <h2 class="text-xs font-semibold uppercase tracking-wider text-indigo-400">Gateway LiteLLM</h2>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-[11px] text-slate-400 mb-1">Host</label>
+            <!-- Configurações do Gateway LiteLLM -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 space-y-3">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-indigo-400">Gateway LiteLLM</h2>
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="col-span-2">
+                        <label class="block text-[11px] font-medium text-slate-400 mb-1">Host IP / Endereço</label>
                         <input type="text" id="host-input" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
                     </div>
                     <div>
-                        <label class="block text-[11px] text-slate-400 mb-1">Porta</label>
+                        <label class="block text-[11px] font-medium text-slate-400 mb-1">Porta</label>
                         <input type="number" id="port-input" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
                     </div>
+                </div>
+                <div>
+                    <label class="block text-[11px] font-medium text-slate-400 mb-1">Chave de API / Master Key (Bearer)</label>
+                    <input type="text" id="apikey-input" placeholder="1234" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500">
                 </div>
             </div>
 
             <div class="flex justify-end gap-3 pt-2">
-                <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-600/30 transition-all">
-                    Salvar Limites RPD
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    Salvar Configurações
                 </button>
             </div>
         </form>
@@ -52,26 +58,27 @@
     <script>
         const { ipcRenderer } = require('electron');
 
-        const defaultGroups = [
-            'gemini-3.5-flash-lite',
-            'gemini-3.6-flash',
-            'gemini-3.5-flash',
-            'groq-fast',
-            'or-super-vl',
-            'cloudflare-last'
-        ];
-
         async function init() {
             const cfg = await ipcRenderer.invoke('get-config');
+            const modelsRes = await ipcRenderer.invoke('fetch-models');
             
             document.getElementById('host-input').value = cfg.litellmHost || '192.168.1.130';
             document.getElementById('port-input').value = cfg.litellmPort || 4000;
+            document.getElementById('apikey-input').value = cfg.litellmApiKey || '1234';
 
             const container = document.getElementById('requests-inputs');
             container.innerHTML = '';
 
             const groupsMap = cfg.maxRequestsByGroup || {};
-            const keys = Array.from(new Set([...defaultGroups, ...Object.keys(groupsMap)]));
+            const apiModels = (modelsRes && modelsRes.success) ? modelsRes.models : [];
+            const savedKeys = Object.keys(groupsMap).filter(g => g !== 'default');
+
+            // Unir modelos vindos da API do LiteLLM + chaves salvas anteriormente
+            const keys = Array.from(new Set([...apiModels, ...savedKeys]));
+
+            if (keys.length === 0) {
+                keys.push('groq-fast', 'gemini-fallback', 'or-super-vl', 'or-flint');
+            }
 
             keys.forEach(g => {
                 if (g === 'default') return;
@@ -79,7 +86,7 @@
                 const div = document.createElement('div');
                 div.className = 'flex items-center justify-between gap-3';
                 div.innerHTML = `
-                    <span class="text-xs font-medium text-slate-300 w-36 truncate" title="${g}">${g}</span>
+                    <span class="text-xs font-medium text-slate-300 w-40 truncate" title="${g}">${g}</span>
                     <input type="number" data-group="${g}" value="${val}" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500">
                 `;
                 container.appendChild(div);
@@ -92,6 +99,7 @@
             
             cfg.litellmHost = document.getElementById('host-input').value;
             cfg.litellmPort = Number(document.getElementById('port-input').value);
+            cfg.litellmApiKey = document.getElementById('apikey-input').value;
 
             if (!cfg.maxRequestsByGroup) cfg.maxRequestsByGroup = {};
             
