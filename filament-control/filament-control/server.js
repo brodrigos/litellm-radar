@@ -5,6 +5,19 @@ const url = require('url');
 
 const PORT = 3030;
 const DATA_FILE = path.join(__dirname, 'data.json');
+const STATE_FILE = path.join(__dirname, 'last_print_state.json');
+
+function loadLastPrintState() {
+    try {
+        return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    } catch {
+        return { state: null, filename: null, filamentUsed: 0, timestamp: null };
+    }
+}
+
+function saveLastPrintState(state) {
+    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+}
 
 function loadData() {
     if (!fs.existsSync(DATA_FILE)) {
@@ -85,6 +98,53 @@ const server = http.createServer((req, res) => {
     if (pathname === '/api/state' && req.method === 'GET') {
         const data = loadData();
         fetchPrinterStatus(data.settings.printerUrl, (err, printerStatus) => {
+            if (!err && printerStatus && printerStatus.print_stats) {
+                const ps = printerStatus.print_stats;
+                const lastState = loadLastPrintState();
+                const currentState = ps.state; // 'printing', 'complete', 'cancelled', 'standby'
+                const filename = ps.filename || 'Desconhecido.gcode';
+                const filamentUsedMm = ps.filament_used || 0; // em milímetros
+                const filamentUsedMeters = filamentUsedMm / 1000;
+                // Densidade média PLA ~1.24 g/cm3, diâmetro 1.75mm -> gramas = pi * (r^2) * comprimento * densidade
+                // r = 0.875 mm = 0.0875 cm
+                // volume cm3 = pi * (0.0875^2) * (comprimento_m * 100)
+                const radiusCm = 0.0875;
+                const lengthCm = filamentUsedMeters * 100;
+                const volumeCm3 = Math.PI * Math.pow(radiusCm, 2) * lengthCm;
+                const activeSpool = data.spools.find(s => s.id === data.activeSpoolId) || data.spools[0];
+                const density = activeSpool ? (activeSpool.densityGcm3 || 1.24) : 1.24;
+                const filamentUsedGrams = volumeCm3 * density;
+
+                // Verificar transição de 'printing' para 'complete' ou 'cancelled'
+                if (lastState.state === 'printing' && (currentState === 'complete' || currentState === 'cancelled')) {
+                    if (filamentUsedGrams > 1 && activeSpool) {
+                        activeSpool.currentWeightGrams = Math.max(0, activeSpool.currentWeightGrams - filamentUsedGrams);
+                        
+                        const netWeight = activeSpool.initialWeightGrams - activeSpool.emptySpoolWeightGrams;
+                        const costPerGram = netWeight > 0 ? (activeSpool.cost / netWeight) : 0;
+                        const cost = filamentUsedGrams * costPerGram;
+
+                        data.history.unshift({
+                            id: Date.now().toString(),
+                            spoolId: activeSpool.id,
+                            printName: `${filename} (${currentState === 'complete' ? 'Concluído' : 'Cancelado'})`,
+                            filamentUsedMeters: parseFloat(filamentUsedMeters.toFixed(2)),
+                            filamentUsedGrams: parseFloat(filamentUsedGrams.toFixed(1)),
+                            cost: parseFloat(cost.toFixed(2)),
+                            timestamp: new Date().toISOString()
+                        });
+                        saveData(data);
+                    }
+                }
+
+                saveLastPrintState({
+                    state: currentState,
+                    filename: filename,
+                    filamentUsed: filamentUsedMm,
+                    timestamp: new Date().toISOString()
+                });
+            }
+
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 ...data,
